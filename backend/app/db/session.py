@@ -6,10 +6,12 @@ from app.core.config import settings
 # Engine configuration
 database_url = settings.DATABASE_URL
 
-# Adjust sqlite settings if needed
+# Adjust database-specific settings
 connect_args = {}
 if database_url.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
+elif database_url.startswith("postgresql://") or database_url.startswith("postgres://"):
+    connect_args = {"ssl_context": True}
 
 # Use pg8000 driver for postgresql if database_url is postgresql://
 if database_url.startswith("postgresql://") or database_url.startswith("postgres://"):
@@ -20,11 +22,13 @@ if database_url.startswith("postgresql://") or database_url.startswith("postgres
     else:
         database_url = database_url.replace("postgres://", "postgresql+pg8000://", 1)
         
-    # Sanitize query parameters (remove channel_binding)
+    # Sanitize query parameters (remove channel_binding and sslmode)
     parsed = urlparse(database_url)
     q_params = dict(parse_qsl(parsed.query))
     if "channel_binding" in q_params:
         del q_params["channel_binding"]
+    if "sslmode" in q_params:
+        del q_params["sslmode"]
     
     # Reconstruct the URL
     new_query = urlencode(q_params)
