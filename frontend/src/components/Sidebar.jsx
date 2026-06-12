@@ -7,10 +7,11 @@ import {
   ShieldAlert, 
   LogOut, 
   Scale,
-  Settings
+  Settings,
+  X
 } from 'lucide-react'
 
-const Sidebar = ({ activeTab, setActiveTab }) => {
+const Sidebar = ({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) => {
   const { user, logout } = useAuth()
 
   const menuItems = [
@@ -33,15 +34,35 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
   }
 
   return (
-    <aside className="w-64 bg-lira-navy text-slate-100 flex flex-col h-screen fixed left-0 top-0 border-r border-slate-800">
-      {/* Brand Header */}
-      <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-        <Scale className="text-amber-500 w-7 h-7" />
-        <div>
-          <h1 className="font-extrabold text-sm tracking-wider text-slate-100 m-0">LIRA ADVOCACIA</h1>
-          <p className="text-[10px] text-amber-500 font-semibold tracking-widest uppercase m-0">People Manager</p>
+    <>
+      {/* Backdrop for mobile */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      
+      <aside className={`w-64 bg-lira-navy text-slate-100 flex flex-col h-screen fixed left-0 top-0 border-r border-slate-800 z-50 transition-transform duration-300 lg:translate-x-0 ${
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}>
+        {/* Brand Header */}
+        <div className="p-6 border-b border-slate-800 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Scale className="text-amber-500 w-7 h-7" />
+            <div>
+              <h1 className="font-extrabold text-sm tracking-wider text-slate-100 m-0">LIRA ADVOCACIA</h1>
+              <p className="text-[10px] text-amber-500 font-semibold tracking-widest uppercase m-0">People Manager</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="lg:hidden p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white cursor-pointer"
+            title="Fechar menu"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
-      </div>
 
       {/* Navigation Items */}
       <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
@@ -85,6 +106,7 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
         </button>
       </div>
     </aside>
+    </>
   )
 }
 

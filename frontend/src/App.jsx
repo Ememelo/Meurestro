@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Sidebar from './components/Sidebar'
+import { Menu } from 'lucide-react'
 import Login from './components/Login'
 import Dashboard from './components/Dashboard'
 import EmployeeList from './components/EmployeeList'
@@ -13,6 +14,7 @@ import UserSettings from './components/UserSettings'
 const AppContent = () => {
   const { user, loading } = useAuth()
   const [activeTab, setActiveTab] = useState('dashboard')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   
   // Navigation states within Employee module
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(null)
@@ -102,28 +104,43 @@ const AppContent = () => {
     setSelectedEmployeeId(null)
     setAddingNewEmployee(false)
     setEditingEmployeeId(null)
+    setSidebarOpen(false)
   }
 
   return (
-    <div className="min-h-screen bg-lira-bg flex">
+    <div className="min-h-screen bg-lira-bg flex relative">
       {/* Sidebar Navigation */}
-      <Sidebar activeTab={activeTab} setActiveTab={handleSetActiveTab} />
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={handleSetActiveTab} 
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+      />
       
       {/* Main Content Area */}
-      <main className="flex-1 pl-64 min-h-screen flex flex-col">
-        <header className="h-16 border-b border-slate-200 bg-white flex items-center justify-between px-8 shrink-0 shadow-sm">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Sistema Operacional Online
-            </span>
+      <main className="flex-1 lg:pl-64 pl-0 min-h-screen flex flex-col w-full overflow-x-hidden">
+        <header className="h-16 border-b border-slate-200 bg-white flex items-center justify-between px-4 lg:px-8 shrink-0 shadow-sm">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden p-2 -ml-2 rounded-lg text-slate-500 hover:bg-slate-100 cursor-pointer"
+              title="Abrir menu"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Sistema Operacional Online
+              </span>
+            </div>
           </div>
-          <div className="text-xs font-semibold text-slate-400">
+          <div className="text-xs font-semibold text-slate-400 hidden sm:block">
             Lira RH Manager v1.0.0
           </div>
         </header>
         
-        <div className="p-8 flex-1 overflow-y-auto">
+        <div className="p-4 sm:p-8 flex-1 overflow-y-auto">
           {renderActiveTabContent()}
         </div>
       </main>

@@ -265,16 +265,16 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
       {/* Top Back Action Bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+          className="flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer self-start"
         >
           <ArrowLeft className="w-4 h-4" />
           Voltar para Lista
         </button>
         
-        <div className="flex gap-2.5">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={handlePrintPDF}
             className="flex items-center gap-2 px-3.5 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer"
@@ -362,7 +362,7 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
       </div>
 
       {/* Tab Navigation Menu */}
-      <div className="flex border-b border-slate-200 bg-white px-4 pt-3 gap-6 rounded-t-xl border-x border-t">
+      <div className="flex border-b border-slate-200 bg-white px-4 pt-3 gap-6 rounded-t-xl border-x border-t overflow-x-auto whitespace-nowrap scrollbar-none">
         {tabs.map((tab) => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
@@ -370,7 +370,7 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 pb-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+              className={`flex items-center gap-2 pb-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer shrink-0 ${
                 isActive 
                   ? 'border-amber-600 text-amber-600' 
                   : 'border-transparent text-slate-400 hover:text-slate-600'

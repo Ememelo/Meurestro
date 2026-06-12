@@ -372,7 +372,7 @@ const EmployeeForm = ({ onCancel, onSuccess, employeeId }) => {
       )}
 
       {/* Tab Navigation */}
-      <div className="flex border-b border-slate-200 px-6 pt-4 gap-6">
+      <div className="flex border-b border-slate-200 px-6 pt-4 gap-6 overflow-x-auto whitespace-nowrap scrollbar-none">
         {tabs.map((tab) => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
@@ -380,7 +380,7 @@ const EmployeeForm = ({ onCancel, onSuccess, employeeId }) => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 pb-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+              className={`flex items-center gap-2 pb-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer shrink-0 ${
                 isActive 
                   ? 'border-amber-600 text-amber-600' 
                   : 'border-transparent text-slate-400 hover:text-slate-600'
