@@ -1,0 +1,32 @@
+Private Sub Worksheet_SelectionChange(ByVal Target As Range)
+    If Target.Count > 1 Then Exit Sub
+    
+    ' Clique na barra lateral (Colunas A a C, Linhas 5 a 22)
+    If Target.Column >= 1 And Target.Column <= 3 And Target.Row >= 5 And Target.Row <= 22 Then
+        Application.EnableEvents = False
+        On Error GoTo Fim
+        
+        Select Case Target.Row
+            Case 5
+                ThisWorkbook.Worksheets("DASHBOARD").Select
+            Case 7
+                ThisWorkbook.Worksheets("CADASTRO").Select
+            Case 9
+                ThisWorkbook.Worksheets("AFASTAMENTOS").Select
+            Case 11
+                ThisWorkbook.Worksheets("DISCIPLINAR").Select
+            Case 13
+                ThisWorkbook.Worksheets("HORAS_EXTRAS").Select
+            Case 15
+                ThisWorkbook.Worksheets("RELATORIOS").Select
+            Case 22
+                Call Mod_Seguranca.Logoff
+        End Select
+        
+Fim:
+        If ActiveSheet.Name <> "LOGOFF" And Err.Number = 0 Then
+            ActiveSheet.Range("E2").Select
+        End If
+        Application.EnableEvents = True
+    End If
+End Sub
