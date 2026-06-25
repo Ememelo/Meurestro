@@ -62,7 +62,7 @@ def get_dashboard_data(
         return leave is not None
 
     if employee_id:
-        emp = db.query(Employee).filter(Employee.id == employee_id).first()
+        emp = db.query(Employee).filter(Employee.id == employee_id, Employee.user_id == current_user.id).first()
         if not emp:
             return {"error": "Colaborador não encontrado."}
             
@@ -130,7 +130,7 @@ def get_dashboard_data(
         }
         
     # General metrics calculation
-    all_employees = db.query(Employee).all()
+    all_employees = db.query(Employee).filter(Employee.user_id == current_user.id).all()
     
     active_in_period = []
     on_leave_in_period = []
@@ -162,18 +162,23 @@ def get_dashboard_data(
     if year != today.year or month is not None:
         total_terminated = len(terminated_in_period)
     else:
-        total_terminated = db.query(func.count(Employee.id)).filter(Employee.status == "terminated").scalar() or 0
+        total_terminated = db.query(func.count(Employee.id)).filter(
+            Employee.user_id == current_user.id,
+            Employee.status == "terminated"
+        ).scalar() or 0
     
     salaries = [emp.contract.base_salary for emp in active_in_period if emp.contract]
     average_salary = round(sum(salaries) / len(salaries), 2) if salaries else 0.0
     
-    warnings_count = db.query(func.count(DisciplinaryAction.id)).filter(
+    warnings_count = db.query(func.count(DisciplinaryAction.id)).join(Employee).filter(
+        Employee.user_id == current_user.id,
         DisciplinaryAction.type == "warning",
         DisciplinaryAction.action_date >= period_start,
         DisciplinaryAction.action_date <= period_end
     ).scalar() or 0
     
-    suspensions_count = db.query(func.count(DisciplinaryAction.id)).filter(
+    suspensions_count = db.query(func.count(DisciplinaryAction.id)).join(Employee).filter(
+        Employee.user_id == current_user.id,
         DisciplinaryAction.type == "suspension",
         DisciplinaryAction.action_date >= period_start,
         DisciplinaryAction.action_date <= period_end
@@ -183,7 +188,8 @@ def get_dashboard_data(
     
     total_ot_minutes = db.query(func.sum(
         Overtime.hours_50_minutes + Overtime.hours_100_minutes + Overtime.hours_night_minutes
-    )).filter(
+    )).join(Employee).filter(
+        Employee.user_id == current_user.id,
         Overtime.date >= period_start,
         Overtime.date <= period_end
     ).scalar() or 0
@@ -217,7 +223,8 @@ def get_dashboard_data(
     by_role = [{"name": k, "count": v} for k, v in role_counts.items()]
     
     if db.bind.name == "sqlite":
-        admissions_query = db.query(func.count(Contract.id)).filter(
+        admissions_query = db.query(func.count(Contract.id)).join(Employee).filter(
+            Employee.user_id == current_user.id,
             func.strftime("%Y", Contract.admission_date) == str(year)
         )
         if month is not None:
@@ -225,7 +232,8 @@ def get_dashboard_data(
                 func.strftime("%m", Contract.admission_date) == f"{month:02d}"
             )
     else:
-        admissions_query = db.query(func.count(Contract.id)).filter(
+        admissions_query = db.query(func.count(Contract.id)).join(Employee).filter(
+            Employee.user_id == current_user.id,
             func.extract("year", Contract.admission_date) == year
         )
         if month is not None:

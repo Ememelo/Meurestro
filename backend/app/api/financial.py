@@ -47,7 +47,7 @@ def get_month_name(month_num: int) -> str:
     }
     return names.get(month_num, "")
 
-def calculate_salaries_for_period(db: Session, year: int, month: int) -> float:
+def calculate_salaries_for_period(db: Session, year: int, month: int, user_id: str) -> float:
     """
     Auto-import salaries from employee contracts active during the given year and month.
     An employee is active if their admission_date <= target_month_end,
@@ -57,7 +57,7 @@ def calculate_salaries_for_period(db: Session, year: int, month: int) -> float:
     # Approximate month end
     target_date = date(year, month, 28)  # safe day for any month
 
-    contracts = db.query(Contract).join(Employee).all()
+    contracts = db.query(Contract).join(Employee).filter(Employee.user_id == user_id).all()
     for contract in contracts:
         emp = contract.employee
         # Check if admitted on or before target month
@@ -119,6 +119,7 @@ def get_financial_summary(
     for m in months_to_process:
         # Sum Revenues
         rev_sum = db.query(FinancialRevenue).filter(
+            FinancialRevenue.user_id == current_user.id,
             FinancialRevenue.reference_year == year,
             FinancialRevenue.reference_month == m
         ).all()
@@ -126,13 +127,14 @@ def get_financial_summary(
 
         # Sum manual Expenses
         exp_sum = db.query(FinancialExpense).filter(
+            FinancialExpense.user_id == current_user.id,
             FinancialExpense.reference_year == year,
             FinancialExpense.reference_month == m
         ).all()
         month_exp = sum(e.amount for e in exp_sum)
 
         # Sum Salaries (Auto)
-        month_sal = calculate_salaries_for_period(db, year, m)
+        month_sal = calculate_salaries_for_period(db, year, m, current_user.id)
 
         # Total expenses for summary includes manual expenses + salaries
         combined_exp = month_exp + month_sal
@@ -165,8 +167,8 @@ def get_financial_summary(
     from sqlalchemy import func
     
     # Find the earliest year in the database to start accumulating from
-    min_rev_year = db.query(func.min(FinancialRevenue.reference_year)).scalar()
-    min_exp_year = db.query(func.min(FinancialExpense.reference_year)).scalar()
+    min_rev_year = db.query(func.min(FinancialRevenue.reference_year)).filter(FinancialRevenue.user_id == current_user.id).scalar()
+    min_exp_year = db.query(func.min(FinancialExpense.reference_year)).filter(FinancialExpense.user_id == current_user.id).scalar()
     # If no records exist, default to 2024
     start_year = min(min_rev_year or year, min_exp_year or year, 2024)
     
@@ -178,15 +180,17 @@ def get_financial_summary(
         # We want all periods (y, m) where y < year OR (y == year and m < month)
         # Sum Revenues
         prev_rev_sum = db.query(func.sum(FinancialRevenue.amount)).filter(
-            (FinancialRevenue.reference_year < year) | 
-            ((FinancialRevenue.reference_year == year) & (FinancialRevenue.reference_month < month))
+            FinancialRevenue.user_id == current_user.id,
+            ((FinancialRevenue.reference_year < year) | 
+             ((FinancialRevenue.reference_year == year) & (FinancialRevenue.reference_month < month)))
         ).scalar() or 0.0
         prev_rev = float(prev_rev_sum)
 
         # Sum Expenses
         prev_exp_sum = db.query(func.sum(FinancialExpense.amount)).filter(
-            (FinancialExpense.reference_year < year) | 
-            ((FinancialExpense.reference_year == year) & (FinancialExpense.reference_month < month))
+            FinancialExpense.user_id == current_user.id,
+            ((FinancialExpense.reference_year < year) | 
+             ((FinancialExpense.reference_year == year) & (FinancialExpense.reference_month < month)))
         ).scalar() or 0.0
         prev_exp = float(prev_exp_sum)
 
@@ -195,17 +199,19 @@ def get_financial_summary(
         for y in range(start_year, year + 1):
             limit_m = month if y == year else 13
             for m in range(1, limit_m):
-                prev_sal += calculate_salaries_for_period(db, y, m)
+                prev_sal += calculate_salaries_for_period(db, y, m, current_user.id)
     else:
         # Yearly view: we want all periods (y, m) where y < year
         # Sum Revenues
         prev_rev_sum = db.query(func.sum(FinancialRevenue.amount)).filter(
+            FinancialRevenue.user_id == current_user.id,
             FinancialRevenue.reference_year < year
         ).scalar() or 0.0
         prev_rev = float(prev_rev_sum)
 
         # Sum Expenses
         prev_exp_sum = db.query(func.sum(FinancialExpense.amount)).filter(
+            FinancialExpense.user_id == current_user.id,
             FinancialExpense.reference_year < year
         ).scalar() or 0.0
         prev_exp = float(prev_exp_sum)
@@ -213,12 +219,15 @@ def get_financial_summary(
         # Sum Salaries
         for y in range(start_year, year):
             for m in range(1, 13):
-                prev_sal += calculate_salaries_for_period(db, y, m)
+                prev_sal += calculate_salaries_for_period(db, y, m, current_user.id)
 
     prev_balance = prev_rev - (prev_exp + prev_sal)
 
     # Category-wise aggregation
-    rev_query = db.query(FinancialRevenue).filter(FinancialRevenue.reference_year == year)
+    rev_query = db.query(FinancialRevenue).filter(
+        FinancialRevenue.user_id == current_user.id,
+        FinancialRevenue.reference_year == year
+    )
     if month is not None:
         rev_query = rev_query.filter(FinancialRevenue.reference_month == month)
     all_revs = rev_query.all()
@@ -227,7 +236,10 @@ def get_financial_summary(
     for r in all_revs:
         category_revenues[r.category] = category_revenues.get(r.category, 0.0) + r.amount
 
-    exp_query = db.query(FinancialExpense).filter(FinancialExpense.reference_year == year)
+    exp_query = db.query(FinancialExpense).filter(
+        FinancialExpense.user_id == current_user.id,
+        FinancialExpense.reference_year == year
+    )
     if month is not None:
         exp_query = exp_query.filter(FinancialExpense.reference_month == month)
     all_exps = exp_query.all()
@@ -262,7 +274,7 @@ def list_revenues(
     db: Session = Depends(get_db),
     current_user: User = Depends(RoleChecker(financial_viewers)),
 ):
-    query = db.query(FinancialRevenue)
+    query = db.query(FinancialRevenue).filter(FinancialRevenue.user_id == current_user.id)
     if year:
         query = query.filter(FinancialRevenue.reference_year == year)
     if month:
@@ -279,6 +291,7 @@ def create_revenue(
     ref_year = revenue_in.date.year
 
     db_revenue = FinancialRevenue(
+        user_id=current_user.id,
         description=revenue_in.description,
         amount=revenue_in.amount,
         category=revenue_in.category,
@@ -308,7 +321,7 @@ def update_revenue(
     db: Session = Depends(get_db),
     current_user: User = Depends(RoleChecker(financial_managers)),
 ):
-    db_revenue = db.query(FinancialRevenue).filter(FinancialRevenue.id == revenue_id).first()
+    db_revenue = db.query(FinancialRevenue).filter(FinancialRevenue.id == revenue_id, FinancialRevenue.user_id == current_user.id).first()
     if not db_revenue:
         raise HTTPException(status_code=404, detail="Receita não encontrada")
 
@@ -340,7 +353,7 @@ def delete_revenue(
     db: Session = Depends(get_db),
     current_user: User = Depends(RoleChecker(financial_managers)),
 ):
-    db_revenue = db.query(FinancialRevenue).filter(FinancialRevenue.id == revenue_id).first()
+    db_revenue = db.query(FinancialRevenue).filter(FinancialRevenue.id == revenue_id, FinancialRevenue.user_id == current_user.id).first()
     if not db_revenue:
         raise HTTPException(status_code=404, detail="Receita não encontrada")
 
@@ -366,7 +379,7 @@ def list_expenses(
     db: Session = Depends(get_db),
     current_user: User = Depends(RoleChecker(financial_viewers)),
 ):
-    query = db.query(FinancialExpense)
+    query = db.query(FinancialExpense).filter(FinancialExpense.user_id == current_user.id)
     if year:
         query = query.filter(FinancialExpense.reference_year == year)
     if month:
@@ -383,6 +396,7 @@ def create_expense(
     ref_year = expense_in.date.year
 
     db_expense = FinancialExpense(
+        user_id=current_user.id,
         description=expense_in.description,
         amount=expense_in.amount,
         category=expense_in.category,
@@ -412,7 +426,7 @@ def update_expense(
     db: Session = Depends(get_db),
     current_user: User = Depends(RoleChecker(financial_managers)),
 ):
-    db_expense = db.query(FinancialExpense).filter(FinancialExpense.id == expense_id).first()
+    db_expense = db.query(FinancialExpense).filter(FinancialExpense.id == expense_id, FinancialExpense.user_id == current_user.id).first()
     if not db_expense:
         raise HTTPException(status_code=404, detail="Despesa não encontrada")
 
@@ -444,7 +458,7 @@ def delete_expense(
     db: Session = Depends(get_db),
     current_user: User = Depends(RoleChecker(financial_managers)),
 ):
-    db_expense = db.query(FinancialExpense).filter(FinancialExpense.id == expense_id).first()
+    db_expense = db.query(FinancialExpense).filter(FinancialExpense.id == expense_id, FinancialExpense.user_id == current_user.id).first()
     if not db_expense:
         raise HTTPException(status_code=404, detail="Despesa não encontrada")
 

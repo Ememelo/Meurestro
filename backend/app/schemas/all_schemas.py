@@ -14,6 +14,7 @@ class UserCreate(UserBase):
 class UserResponse(UserBase):
     id: str
     is_active: bool
+    password_reset_requested: bool = False
 
     class Config:
         orm_mode = True
@@ -34,6 +35,13 @@ class LoginRequest(BaseModel):
 class PasswordChangeRequest(BaseModel):
     old_password: str
     new_password: str
+
+class AdminPasswordResetRequest(BaseModel):
+    new_password: str
+
+class ForgotPasswordRequest(BaseModel):
+    username: str
+    email: str
 
 # ----------------- Dependent Schemas -----------------
 class DependentBase(BaseModel):

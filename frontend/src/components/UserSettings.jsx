@@ -176,6 +176,26 @@ const UserSettings = () => {
     }
   }
 
+  const handleResetUserPassword = async (targetUser) => {
+    const newPassword = prompt(`Digite a nova senha para o usuário "${targetUser.username}":`)
+    if (newPassword === null) return // canceled
+    
+    if (newPassword.trim().length < 4) {
+      alert('A nova senha deve conter no mínimo 4 caracteres.')
+      return
+    }
+
+    try {
+      await api.post(`/auth/users/${targetUser.id}/reset-password`, {
+        new_password: newPassword.trim()
+      })
+      alert(`Senha do usuário "${targetUser.username}" alterada com sucesso!`)
+      fetchUsers()
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Erro ao resetar senha do usuário.')
+    }
+  }
+
   const handleToggleActive = async (targetUser) => {
     if (targetUser.username === user.username) {
       alert('Você não pode desativar seu próprio usuário.')
@@ -503,6 +523,11 @@ const UserSettings = () => {
                                   Você
                                 </span>
                               )}
+                              {u.password_reset_requested && (
+                                <span className="inline-block px-1.5 py-0.2 bg-red-105 border border-red-200 text-red-700 rounded text-[9px] font-bold animate-pulse">
+                                  Solicitou Reset
+                                </span>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-slate-500">{u.email}</td>
                             <td className="px-4 py-3 font-semibold text-slate-700">
@@ -526,21 +551,30 @@ const UserSettings = () => {
                               </span>
                             </td>
                             <td className="px-4 py-3 text-center">
-                              {!isSelf ? (
+                              <div className="flex items-center justify-center gap-2">
                                 <button
-                                  onClick={() => handleToggleActive(u)}
-                                  className={`p-1.5 rounded transition-all cursor-pointer ${
-                                    u.is_active
-                                      ? 'text-red-500 hover:text-red-700 hover:bg-red-50'
-                                      : 'text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50'
-                                  }`}
-                                  title={u.is_active ? 'Desativar Conta' : 'Ativar Conta'}
+                                  onClick={() => handleResetUserPassword(u)}
+                                  className="p-1.5 rounded text-amber-600 hover:text-amber-700 hover:bg-amber-50 transition-all cursor-pointer"
+                                  title="Resetar Senha"
                                 >
-                                  <Power className="w-4 h-4" />
+                                  <Key className="w-4 h-4" />
                                 </button>
-                              ) : (
-                                <span className="text-slate-300 font-semibold text-[10px]">-</span>
-                              )}
+                                {!isSelf ? (
+                                  <button
+                                    onClick={() => handleToggleActive(u)}
+                                    className={`p-1.5 rounded transition-all cursor-pointer ${
+                                      u.is_active
+                                        ? 'text-red-500 hover:text-red-700 hover:bg-red-50'
+                                        : 'text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50'
+                                    }`}
+                                    title={u.is_active ? 'Desativar Conta' : 'Ativar Conta'}
+                                  >
+                                    <Power className="w-4 h-4" />
+                                  </button>
+                                ) : (
+                                  <span className="w-7 text-center text-slate-300 font-semibold text-[10px]">-</span>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         )

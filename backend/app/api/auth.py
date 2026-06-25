@@ -1,3 +1,4 @@
+import re
 from datetime import timedelta
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,8 +9,20 @@ from app.core.config import settings
 from app.core.security import verify_password, get_password_hash, create_access_token
 from app.db.session import get_db
 from app.models.all_models import User
-from app.schemas.all_schemas import Token, LoginRequest, UserResponse, UserCreate, PasswordChangeRequest
+from app.schemas.all_schemas import (
+    Token, LoginRequest, UserResponse, UserCreate, PasswordChangeRequest,
+    AdminPasswordResetRequest, ForgotPasswordRequest
+)
 from app.services.audit_service import log_action
+
+EMAIL_REGEX = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+
+def validate_email_format(email: str):
+    if not EMAIL_REGEX.match(email):
+        raise HTTPException(
+            status_code=400,
+            detail="Formato de e-mail inválido. Utilize um formato padrão como exemplo@dominio.com."
+        )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -80,6 +93,7 @@ def register(
     db: Session = Depends(get_db),
     current_user: User = Depends(RoleChecker(["admin"]))
 ):
+    validate_email_format(user_in.email)
     existing_user = db.query(User).filter(
         (User.username == user_in.username) | (User.email == user_in.email)
     ).first()
@@ -117,6 +131,7 @@ def signup(
     user_in: UserCreate,
     db: Session = Depends(get_db)
 ):
+    validate_email_format(user_in.email)
     existing_user = db.query(User).filter(
         (User.username == user_in.username) | (User.email == user_in.email)
     ).first()
@@ -193,3 +208,43 @@ def toggle_user_active(
     db.commit()
     log_action(db, current_user.id, "TOGGLE_USER_ACTIVE", "users", user_id, {"username": user.username, "active": user.is_active})
     return {"message": "Status do usuário alterado com sucesso.", "is_active": user.is_active}
+
+
+# Esqueci a Senha (Público)
+@router.post("/forgot-password")
+def forgot_password(
+    req: ForgotPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(
+        User.username == req.username,
+        User.email == req.email
+    ).first()
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="Nenhum usuário ativo encontrado com o nome de usuário e e-mail fornecidos."
+        )
+    user.password_reset_requested = True
+    db.commit()
+    log_action(db, user.id, "REQUEST_PASSWORD_RESET", "users", user.id)
+    return {"message": "Solicitação de redefinição de senha enviada para o administrador master."}
+
+
+# Resetar Senha de Outro Usuário (Apenas Admin)
+@router.post("/users/{user_id}/reset-password")
+def admin_reset_password(
+    user_id: str,
+    req: AdminPasswordResetRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(RoleChecker(["admin"]))
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+    
+    user.password_hash = get_password_hash(req.new_password)
+    user.password_reset_requested = False
+    db.commit()
+    log_action(db, current_user.id, "ADMIN_RESET_PASSWORD", "users", user_id, {"username": user.username})
+    return {"message": f"Senha do usuário {user.username} redefinida com sucesso."}

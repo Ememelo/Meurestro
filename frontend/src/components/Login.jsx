@@ -6,6 +6,7 @@ import api from '../utils/api'
 const Login = () => {
   const { login, error, setError } = useAuth()
   const [isSignUp, setIsSignUp] = useState(false)
+  const [isForgotPassword, setIsForgotPassword] = useState(false)
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -18,9 +19,39 @@ const Login = () => {
     setError(null)
     setSignupSuccess('')
     
-    if (isSignUp) {
+    // Email regex validation pattern
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+
+    if (isForgotPassword) {
+      if (!username.trim() || !email.trim()) {
+        setError('Por favor, preencha o usuário e o e-mail.')
+        return
+      }
+      if (!emailRegex.test(email.trim())) {
+        setError('Por favor, insira um e-mail com formato válido (exemplo@dominio.com).')
+        return
+      }
+      setLocalLoading(true)
+      try {
+        await api.post('/auth/forgot-password', {
+          username: username.trim(),
+          email: email.trim()
+        })
+        setSignupSuccess('Solicitação de redefinição enviada! Entre em contato com o administrador master para obter a nova senha.')
+        setIsForgotPassword(false)
+        setPassword('')
+      } catch (err) {
+        setError(err.response?.data?.detail || 'Erro ao processar solicitação de recuperação de senha.')
+      } finally {
+        setLocalLoading(false)
+      }
+    } else if (isSignUp) {
       if (!username.trim() || !email.trim() || !password.trim()) {
         setError('Por favor, preencha todos os campos.')
+        return
+      }
+      if (!emailRegex.test(email.trim())) {
+        setError('Por favor, insira um e-mail com formato válido (exemplo@dominio.com).')
         return
       }
       setLocalLoading(true)
@@ -50,12 +81,6 @@ const Login = () => {
     }
   }
 
-  const handleToggleMode = () => {
-    setError(null)
-    setSignupSuccess('')
-    setIsSignUp(!isSignUp)
-  }
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-950 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-slate-950 px-4">
       <div className="max-w-md w-full bg-slate-900/40 backdrop-blur-md border border-slate-800 p-8 rounded-2xl shadow-2xl shadow-black/80">
@@ -67,7 +92,11 @@ const Login = () => {
           </div>
           <h2 className="text-xl font-extrabold text-slate-100 tracking-wider">MEURESTÔ</h2>
           <p className="text-xs text-slate-400 mt-1">
-            {isSignUp ? 'Criar Nova Conta Local' : 'Gestão de Restaurante - Painel Administrativo'}
+            {isForgotPassword 
+              ? 'Recuperar Acesso da Conta' 
+              : isSignUp 
+                ? 'Criar Nova Conta Local' 
+                : 'Gestão de Restaurante - Painel Administrativo'}
           </p>
         </div>
 
@@ -108,69 +137,71 @@ const Login = () => {
             </div>
           </div>
 
-          {isSignUp && (
-            <>
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-widest mb-1.5">
-                  E-mail
-                </label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
-                    <Mail className="w-4 h-4" />
-                  </span>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="email@exemplo.com"
-                    className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm transition-all shadow-inner"
-                    required
-                  />
-                </div>
+          {(isSignUp || isForgotPassword) && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-widest mb-1.5">
+                E-mail
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
+                  <Mail className="w-4 h-4" />
+                </span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="email@exemplo.com"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm transition-all shadow-inner"
+                  required
+                />
               </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-widest mb-1.5">
-                  Perfil de Acesso
-                </label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
-                    <Shield className="w-4 h-4" />
-                  </span>
-                  <select
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm transition-all cursor-pointer"
-                  >
-                    <option value="socio">Sócio-Diretor (Acesso Total + Financeiro)</option>
-                    <option value="admin">Administrador (Master)</option>
-                    <option value="rh">Recursos Humanos (RH)</option>
-                    <option value="gestor">Gestor de Equipe</option>
-                    <option value="consulta">Somente Leitura</option>
-                  </select>
-                </div>
-              </div>
-            </>
+            </div>
           )}
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-widest mb-1.5">
-              Senha
-            </label>
-            <div className="relative">
-              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
-                <Lock className="w-4 h-4" />
-              </span>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Insira sua senha"
-                className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm transition-all shadow-inner"
-                required
-              />
+          {isSignUp && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-widest mb-1.5">
+                Perfil de Acesso
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
+                  <Shield className="w-4 h-4" />
+                </span>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm transition-all cursor-pointer"
+                >
+                  <option value="socio">Sócio-Diretor (Acesso Total + Financeiro)</option>
+                  <option value="admin">Administrador (Master)</option>
+                  <option value="rh">Recursos Humanos (RH)</option>
+                  <option value="gestor">Gestor de Equipe</option>
+                  <option value="consulta">Somente Leitura</option>
+                </select>
+              </div>
             </div>
-          </div>
+          )}
+
+          {!isForgotPassword && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-widest mb-1.5">
+                Senha
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
+                  <Lock className="w-4 h-4" />
+                </span>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Insira sua senha"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm transition-all shadow-inner"
+                  required
+                />
+              </div>
+            </div>
+          )}
 
           <div className="pt-2">
             <button
@@ -179,23 +210,62 @@ const Login = () => {
               className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-800/50 text-white font-bold rounded-xl text-sm transition-all hover:shadow-lg hover:shadow-amber-600/10 active:scale-[0.98] cursor-pointer"
             >
               {localLoading 
-                ? (isSignUp ? 'Cadastrando...' : 'Autenticando...') 
-                : (isSignUp ? 'Criar Nova Conta' : 'Acessar o Sistema')}
+                ? (isForgotPassword ? 'Enviando...' : isSignUp ? 'Cadastrando...' : 'Autenticando...') 
+                : (isForgotPassword ? 'Solicitar Nova Senha' : isSignUp ? 'Criar Nova Conta' : 'Acessar o Sistema')}
             </button>
           </div>
         </form>
 
-        {/* Toggle Mode Link */}
-        <div className="text-center mt-5">
-          <button
-            type="button"
-            onClick={handleToggleMode}
-            className="text-xs text-amber-500 hover:text-amber-400 font-bold transition-all cursor-pointer"
-          >
-            {isSignUp 
-              ? 'Já possui uma conta? Faça login' 
-              : 'Não tem uma conta? Cadastre-se localmente'}
-          </button>
+        {/* Toggle Mode Links */}
+        <div className="text-center mt-5 space-y-2.5">
+          {!isForgotPassword ? (
+            <>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null)
+                    setSignupSuccess('')
+                    setIsSignUp(!isSignUp)
+                  }}
+                  className="text-xs text-amber-500 hover:text-amber-400 font-bold transition-all cursor-pointer"
+                >
+                  {isSignUp 
+                    ? 'Já possui uma conta? Faça login' 
+                    : 'Não tem uma conta? Cadastre-se localmente'}
+                </button>
+              </div>
+              {!isSignUp && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError(null)
+                      setSignupSuccess('')
+                      setIsForgotPassword(true)
+                    }}
+                    className="text-xs text-slate-400 hover:text-slate-300 transition-all cursor-pointer"
+                  >
+                    Esqueceu sua senha?
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <div>
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null)
+                  setSignupSuccess('')
+                  setIsForgotPassword(false)
+                }}
+                className="text-xs text-amber-500 hover:text-amber-400 font-bold transition-all cursor-pointer"
+              >
+                Voltar para o Login
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Footer info */}

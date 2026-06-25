@@ -35,7 +35,7 @@ def list_employees(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    query = db.query(Employee)
+    query = db.query(Employee).filter(Employee.user_id == current_user.id)
     
     if search:
         query = query.filter(
@@ -99,7 +99,7 @@ def get_employee(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    emp = db.query(Employee).filter(Employee.id == employee_id).first()
+    emp = db.query(Employee).filter(Employee.id == employee_id, Employee.user_id == current_user.id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Colaborador não encontrado.")
     return emp
@@ -139,6 +139,7 @@ def create_employee(
         )
         
     db_emp = Employee(
+        user_id=current_user.id,
         registration_number=reg_num,
         name=emp_in.name,
         cpf=emp_in.cpf,
@@ -222,7 +223,7 @@ def update_employee(
     db: Session = Depends(get_db),
     current_user: User = Depends(RoleChecker(["admin", "rh"]))
 ):
-    db_emp = db.query(Employee).filter(Employee.id == employee_id).first()
+    db_emp = db.query(Employee).filter(Employee.id == employee_id, Employee.user_id == current_user.id).first()
     if not db_emp:
         raise HTTPException(status_code=404, detail="Colaborador não encontrado.")
         
@@ -289,7 +290,7 @@ def upload_photo(
     db: Session = Depends(get_db),
     current_user: User = Depends(RoleChecker(["admin", "rh"]))
 ):
-    emp = db.query(Employee).filter(Employee.id == employee_id).first()
+    emp = db.query(Employee).filter(Employee.id == employee_id, Employee.user_id == current_user.id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Colaborador não encontrado.")
         
@@ -317,7 +318,7 @@ def get_employee_career_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    emp = db.query(Employee).filter(Employee.id == employee_id).first()
+    emp = db.query(Employee).filter(Employee.id == employee_id, Employee.user_id == current_user.id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Colaborador não encontrado.")
     return db.query(CareerHistory).filter(CareerHistory.employee_id == employee_id).order_by(CareerHistory.change_date.desc()).all()
@@ -329,7 +330,7 @@ def delete_employee(
     db: Session = Depends(get_db),
     current_user: User = Depends(RoleChecker(["admin"]))
 ):
-    emp = db.query(Employee).filter(Employee.id == employee_id).first()
+    emp = db.query(Employee).filter(Employee.id == employee_id, Employee.user_id == current_user.id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Colaborador não encontrado.")
         
@@ -345,7 +346,7 @@ def delete_dependent(
     db: Session = Depends(get_db),
     current_user: User = Depends(RoleChecker(["admin", "rh"]))
 ):
-    dep = db.query(Dependent).filter(Dependent.id == dependent_id).first()
+    dep = db.query(Dependent).join(Employee).filter(Dependent.id == dependent_id, Employee.user_id == current_user.id).first()
     if not dep:
         raise HTTPException(status_code=404, detail="Dependente não encontrado.")
     db.delete(dep)
@@ -360,7 +361,7 @@ def add_dependent(
     db: Session = Depends(get_db),
     current_user: User = Depends(RoleChecker(["admin", "rh"]))
 ):
-    emp = db.query(Employee).filter(Employee.id == employee_id).first()
+    emp = db.query(Employee).filter(Employee.id == employee_id, Employee.user_id == current_user.id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Colaborador não encontrado.")
     db_dep = Dependent(
@@ -382,7 +383,7 @@ def update_dependent(
     db: Session = Depends(get_db),
     current_user: User = Depends(RoleChecker(["admin", "rh"]))
 ):
-    dep = db.query(Dependent).filter(Dependent.id == dependent_id).first()
+    dep = db.query(Dependent).join(Employee).filter(Dependent.id == dependent_id, Employee.user_id == current_user.id).first()
     if not dep:
         raise HTTPException(status_code=404, detail="Dependente não encontrado.")
     dep.name = dep_in.name

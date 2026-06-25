@@ -17,6 +17,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     role = Column(String(20), default="consulta", nullable=False)  # admin, rh, socio, gestor, consulta
     is_active = Column(Boolean, default=True, nullable=False)
+    password_reset_requested = Column(Boolean, default=False, nullable=False)
     
     # Relationships
     audit_logs = relationship("AuditLog", back_populates="user")
@@ -25,6 +26,7 @@ class Employee(Base):
     __tablename__ = "employees"
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     registration_number = Column(String(20), unique=True, nullable=False, index=True)
     name = Column(String(100), nullable=False, index=True)
     cpf = Column(String(14), unique=True, nullable=False, index=True)
@@ -186,6 +188,7 @@ class FinancialRevenue(Base):
     __tablename__ = "financial_revenues"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     description = Column(String(255), nullable=False)
     amount = Column(Float, nullable=False)
     category = Column(String(50), nullable=False)  # Vendas, Delivery, Eventos, Outros
@@ -199,6 +202,7 @@ class FinancialExpense(Base):
     __tablename__ = "financial_expenses"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     description = Column(String(255), nullable=False)
     amount = Column(Float, nullable=False)
     category = Column(String(50), nullable=False)  # Compras/Insumos, Salários, Aluguel, Energia/Água, Equipamentos, Marketing, Outros

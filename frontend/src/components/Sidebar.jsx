@@ -16,11 +16,10 @@ const Sidebar = ({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) => {
   const { user, logout } = useAuth()
 
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'rh', 'socio', 'gestor', 'consulta'] },
-    { id: 'employees', label: 'Colaboradores', icon: Users, roles: ['admin', 'rh', 'socio', 'gestor', 'consulta'] },
-    { id: 'financial', label: 'Financeiro', icon: TrendingUp, roles: ['admin', 'socio'] },
-    { id: 'reports', label: 'Relatórios', icon: FileSpreadsheet, roles: ['admin', 'rh', 'socio'] },
-    { id: 'audit', label: 'Auditoria', icon: ShieldAlert, roles: ['admin'] },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['rh', 'socio', 'gestor', 'consulta'] },
+    { id: 'employees', label: 'Colaboradores', icon: Users, roles: ['rh', 'socio', 'gestor', 'consulta'] },
+    { id: 'financial', label: 'Financeiro', icon: TrendingUp, roles: ['socio'] },
+    { id: 'reports', label: 'Relatórios', icon: FileSpreadsheet, roles: ['rh', 'socio'] },
     { id: 'settings', label: 'Acesso & Usuários', icon: Settings, roles: ['admin', 'rh', 'socio', 'gestor', 'consulta'] }
   ]
 

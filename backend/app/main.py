@@ -27,21 +27,58 @@ Base.metadata.create_all(bind=engine)
 def auto_migrate():
     db = SessionLocal()
     try:
+        from sqlalchemy import text
+        # Existing columns
         columns_to_add = {
-            "ctps": "VARCHAR(30)",
-            "pis": "VARCHAR(30)",
-            "reservista": "VARCHAR(30)"
+            "ctps": ("employees", "VARCHAR(30)"),
+            "pis": ("employees", "VARCHAR(30)"),
+            "reservista": ("employees", "VARCHAR(30)"),
+            "user_id": ("employees", "VARCHAR(36)"),
         }
-        for col_name, col_type in columns_to_add.items():
+        for col_name, (table_name, col_type) in columns_to_add.items():
             try:
-                # Use text() to avoid warnings, or simple raw SQL execute
-                from sqlalchemy import text
-                db.execute(text(f"SELECT {col_name} FROM employees LIMIT 1"))
+                db.execute(text(f"SELECT {col_name} FROM {table_name} LIMIT 1"))
             except Exception:
                 db.rollback()
-                print(f"Auto-migration: Adding column {col_name} to employees table...")
-                db.execute(text(f"ALTER TABLE employees ADD COLUMN {col_name} {col_type}"))
+                print(f"Auto-migration: Adding column {col_name} to {table_name} table...")
+                db.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type}"))
                 db.commit()
+
+        # Add user_id to financial_revenues
+        try:
+            db.execute(text("SELECT user_id FROM financial_revenues LIMIT 1"))
+        except Exception:
+            db.rollback()
+            print("Auto-migration: Adding column user_id to financial_revenues table...")
+            db.execute(text("ALTER TABLE financial_revenues ADD COLUMN user_id VARCHAR(36)"))
+            db.commit()
+
+        # Add user_id to financial_expenses
+        try:
+            db.execute(text("SELECT user_id FROM financial_expenses LIMIT 1"))
+        except Exception:
+            db.rollback()
+            print("Auto-migration: Adding column user_id to financial_expenses table...")
+            db.execute(text("ALTER TABLE financial_expenses ADD COLUMN user_id VARCHAR(36)"))
+            db.commit()
+
+        # Add password_reset_requested to users
+        try:
+            db.execute(text("SELECT password_reset_requested FROM users LIMIT 1"))
+        except Exception:
+            db.rollback()
+            print("Auto-migration: Adding column password_reset_requested to users table...")
+            db.execute(text("ALTER TABLE users ADD COLUMN password_reset_requested BOOLEAN DEFAULT 0"))
+            db.commit()
+
+        # Update existing records to default admin's user_id if null
+        admin_user = db.query(User).filter(User.username == "admin").first()
+        if admin_user:
+            db.execute(text(f"UPDATE employees SET user_id = '{admin_user.id}' WHERE user_id IS NULL"))
+            db.execute(text(f"UPDATE financial_revenues SET user_id = '{admin_user.id}' WHERE user_id IS NULL"))
+            db.execute(text(f"UPDATE financial_expenses SET user_id = '{admin_user.id}' WHERE user_id IS NULL"))
+            db.commit()
+
     except Exception as e:
         print(f"Auto-migration error: {e}")
     finally:

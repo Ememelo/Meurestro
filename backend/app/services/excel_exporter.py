@@ -5,7 +5,7 @@ from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from sqlalchemy.orm import Session
 from app.models.all_models import Employee, CareerHistory, DisciplinaryAction, Leave
 
-def export_consolidated_data_excel(db: Session) -> io.BytesIO:
+def export_consolidated_data_excel(db: Session, user_id: str) -> io.BytesIO:
     """
     Exports a comprehensive multi-tab Excel spreadsheet containing:
     1. Employee master database
@@ -54,7 +54,7 @@ def export_consolidated_data_excel(db: Session) -> io.BytesIO:
         cell.alignment = Alignment(horizontal="center", vertical="center")
         
     # Data rows
-    employees = db.query(Employee).all()
+    employees = db.query(Employee).filter(Employee.user_id == user_id).all()
     for row_idx, emp in enumerate(employees, start=4):
         adm_date = emp.contract.admission_date.strftime("%d/%m/%Y") if emp.contract and emp.contract.admission_date else ""
         salary = emp.contract.base_salary if emp.contract else 0.0
@@ -105,7 +105,7 @@ def export_consolidated_data_excel(db: Session) -> io.BytesIO:
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal="center", vertical="center")
         
-    histories = db.query(CareerHistory).order_by(CareerHistory.change_date.desc()).all()
+    histories = db.query(CareerHistory).join(Employee).filter(Employee.user_id == user_id).order_by(CareerHistory.change_date.desc()).all()
     for row_idx, hist in enumerate(histories, start=4):
         emp_name = hist.employee.name if hist.employee else "N/A"
         emp_reg = hist.employee.registration_number if hist.employee else "N/A"
@@ -145,7 +145,7 @@ def export_consolidated_data_excel(db: Session) -> io.BytesIO:
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal="center", vertical="center")
         
-    disc_actions = db.query(DisciplinaryAction).order_by(DisciplinaryAction.action_date.desc()).all()
+    disc_actions = db.query(DisciplinaryAction).join(Employee).filter(Employee.user_id == user_id).order_by(DisciplinaryAction.action_date.desc()).all()
     for row_idx, act in enumerate(disc_actions, start=4):
         emp_name = act.employee.name if act.employee else "N/A"
         emp_reg = act.employee.registration_number if act.employee else "N/A"
@@ -185,7 +185,7 @@ def export_consolidated_data_excel(db: Session) -> io.BytesIO:
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal="center", vertical="center")
         
-    leaves = db.query(Leave).order_by(Leave.start_date.desc()).all()
+    leaves = db.query(Leave).join(Employee).filter(Employee.user_id == user_id).order_by(Leave.start_date.desc()).all()
     for row_idx, leave in enumerate(leaves, start=4):
         emp_name = leave.employee.name if leave.employee else "N/A"
         emp_reg = leave.employee.registration_number if leave.employee else "N/A"

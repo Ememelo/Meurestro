@@ -19,7 +19,7 @@ def get_employee_pdf(
     """
     Downloads the Ficha do Colaborador PDF. Accessible to all logged in users.
     """
-    emp = db.query(Employee).filter(Employee.id == employee_id).first()
+    emp = db.query(Employee).filter(Employee.id == employee_id, Employee.user_id == current_user.id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Colaborador não encontrado.")
         
@@ -43,7 +43,7 @@ def get_consolidated_excel(
     """
     Downloads the consolidated spreadsheet report. Restricted to Admin, RH, and Sócio.
     """
-    excel_buffer = export_consolidated_data_excel(db)
+    excel_buffer = export_consolidated_data_excel(db, current_user.id)
     
     log_action(db, current_user.id, "EXPORT_EXCEL")
     
