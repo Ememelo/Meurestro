@@ -68,7 +68,7 @@ def auto_migrate():
         except Exception:
             db.rollback()
             print("Auto-migration: Adding column password_reset_requested to users table...")
-            db.execute(text("ALTER TABLE users ADD COLUMN password_reset_requested BOOLEAN DEFAULT 0"))
+            db.execute(text("ALTER TABLE users ADD COLUMN password_reset_requested BOOLEAN DEFAULT false"))
             db.commit()
 
         # Update existing records to default admin's user_id if null
