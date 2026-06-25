@@ -685,12 +685,20 @@ const Financial = () => {
         </button>
       </div>
 
-      {/* Date controls for Dashboard tab */}
-      {subTab === 'dashboard' && (
+      {/* Date controls for filtering (hidden only for suppliers) */}
+      {subTab !== 'suppliers' && (
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
           <div>
-            <h2 className="text-lg font-black text-slate-800 tracking-tight">Demonstrativo Financeiro</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Ano de referência e fechamento consolidado</p>
+            <h2 className="text-lg font-black text-slate-800 tracking-tight">
+              {subTab === 'dashboard' ? 'Demonstrativo Financeiro' : 
+               subTab === 'revenues' ? 'Filtro de Recebimentos' : 
+               subTab === 'payments' ? 'Filtro de Pagamentos' : 'Período de Referência'}
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {subTab === 'dashboard' ? 'Ano de referência e fechamento consolidado' : 
+               subTab === 'revenues' ? 'Período de referência para visualização de entradas' : 
+               subTab === 'payments' ? 'Período de referência para visualização de saídas' : 'Selecione o ano e mês para filtragem'}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <select
