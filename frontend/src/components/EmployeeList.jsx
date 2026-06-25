@@ -47,7 +47,7 @@ const EmployeeList = ({ onSelectEmployee, onAddNew, onEditEmployee, onDeleteEmpl
     }
   }
 
-  const canEdit = user?.role === 'rh'
+  const canEdit = user?.role === 'rh' || user?.role === 'admin'
 
   const getStatusBadgeClass = (status) => {
     const classes = {
@@ -209,7 +209,7 @@ const EmployeeList = ({ onSelectEmployee, onAddNew, onEditEmployee, onDeleteEmpl
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                         )}
-                        {user?.role === 'rh' && (
+                        {canEdit && (
                           <button
                             title="Excluir Cadastro Permanentemente"
                             onClick={(e) => {
