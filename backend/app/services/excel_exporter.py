@@ -37,7 +37,7 @@ def export_consolidated_data_excel(db: Session) -> io.BytesIO:
     
     # Headers
     headers1 = [
-        "Matrícula", "Nome Completo", "CPF", "RG", "Data Nascimento", "E-mail", "Telefone",
+        "Matrícula", "Nome Completo", "CPF", "RG", "CTPS", "PIS", "Reservista", "Data Nascimento", "E-mail", "Telefone",
         "Cargo", "Departamento", "Data Admissão", "Salário Base", "Status"
     ]
     
@@ -63,7 +63,7 @@ def export_consolidated_data_excel(db: Session) -> io.BytesIO:
         dob = emp.dob.strftime("%d/%m/%Y") if emp.dob else ""
         
         row_data = [
-            emp.registration_number, emp.name, emp.cpf, emp.rg, dob, emp.email, emp.phone,
+            emp.registration_number, emp.name, emp.cpf, emp.rg, emp.ctps or "", emp.pis or "", emp.reservista or "", dob, emp.email, emp.phone,
             role, dept, adm_date, salary, emp.status.upper()
         ]
         ws1.append(row_data)
@@ -76,9 +76,9 @@ def export_consolidated_data_excel(db: Session) -> io.BytesIO:
             if row_idx % 2 == 1:
                 cell.fill = alt_row_fill
             # Alignments
-            if col_idx in [1, 3, 4, 5, 10, 12]:
+            if col_idx in [1, 3, 4, 5, 6, 7, 8, 13, 15]:
                 cell.alignment = Alignment(horizontal="center")
-            elif col_idx == 11:
+            elif col_idx == 14:
                 cell.number_format = '"R$" #,##0.00'
                 cell.alignment = Alignment(horizontal="right")
                 

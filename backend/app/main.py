@@ -22,6 +22,31 @@ from app.api.financial import router as financial_router
 # Create Database tables on startup
 Base.metadata.create_all(bind=engine)
 
+def auto_migrate():
+    db = SessionLocal()
+    try:
+        columns_to_add = {
+            "ctps": "VARCHAR(30)",
+            "pis": "VARCHAR(30)",
+            "reservista": "VARCHAR(30)"
+        }
+        for col_name, col_type in columns_to_add.items():
+            try:
+                # Use text() to avoid warnings, or simple raw SQL execute
+                from sqlalchemy import text
+                db.execute(text(f"SELECT {col_name} FROM employees LIMIT 1"))
+            except Exception:
+                db.rollback()
+                print(f"Auto-migration: Adding column {col_name} to employees table...")
+                db.execute(text(f"ALTER TABLE employees ADD COLUMN {col_name} {col_type}"))
+                db.commit()
+    except Exception as e:
+        print(f"Auto-migration error: {e}")
+    finally:
+        db.close()
+
+auto_migrate()
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="Backend API - MeuRestô",

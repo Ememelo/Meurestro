@@ -113,6 +113,9 @@ class EmployeeBase(BaseModel):
     disability_details: Optional[str] = None
     education: str
     status: str = "active"
+    ctps: Optional[str] = None
+    pis: Optional[str] = None
+    reservista: Optional[str] = None
 
 class EmployeeCreate(EmployeeBase):
     contract: ContractCreate
@@ -141,6 +144,9 @@ class EmployeeUpdate(BaseModel):
     disability_details: Optional[str] = None
     education: Optional[str] = None
     status: Optional[str] = None
+    ctps: Optional[str] = None
+    pis: Optional[str] = None
+    reservista: Optional[str] = None
     
     # Optional nested contract update
     role: Optional[str] = None
@@ -312,4 +318,5 @@ class FinancialSummaryResponse(BaseModel):
     total_salaries: float
     net_result: float
     margin_percentage: float
+    previous_month_balance: Optional[float] = 0.0
     monthly_breakdown: List[FinancialSummaryMonth]

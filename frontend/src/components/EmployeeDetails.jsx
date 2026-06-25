@@ -553,11 +553,15 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
                 </div>
                 <div className="flex justify-between py-2 border-b border-slate-100">
                   <span className="font-bold text-slate-500 text-xs">PIS / PASEP:</span>
-                  <span className="text-slate-800">120.34567.89-0 (Simulado)</span>
+                  <span className="text-slate-800">{emp.pis || 'Não cadastrado'}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b border-slate-100">
                   <span className="font-bold text-slate-500 text-xs">CTPS & Série:</span>
-                  <span className="text-slate-800">456789 Série 001-SP (Simulado)</span>
+                  <span className="text-slate-800">{emp.ctps || 'Não cadastrado'}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-slate-100">
+                  <span className="font-bold text-slate-500 text-xs">Nº Reservista:</span>
+                  <span className="text-slate-800">{emp.reservista || 'Não cadastrado'}</span>
                 </div>
               </div>
             </div>

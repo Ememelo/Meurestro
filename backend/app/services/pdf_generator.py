@@ -96,7 +96,11 @@ def generate_employee_ficha_pdf(emp: Employee) -> io.BytesIO:
         [Paragraph("E-mail:", label_style), Paragraph(emp.email, value_style),
          Paragraph("Telefone:", label_style), Paragraph(emp.phone, value_style)],
         [Paragraph("Nome da Mãe:", label_style), Paragraph(emp.mother_name, value_style),
-         Paragraph("Nome do Pai:", label_style), Paragraph(emp.father_name or "Não Informado", value_style)]
+         Paragraph("Nome do Pai:", label_style), Paragraph(emp.father_name or "Não Informado", value_style)],
+        [Paragraph("Nº CTPS:", label_style), Paragraph(emp.ctps or "N/A", value_style),
+         Paragraph("Nº PIS:", label_style), Paragraph(emp.pis or "N/A", value_style)],
+        [Paragraph("Nº Reservista:", label_style), Paragraph(emp.reservista or "N/A", value_style),
+         Paragraph("PCD:", label_style), Paragraph("Sim" if emp.has_disability else "Não", value_style)]
     ]
     
     t_personal = Table(personal_data, colWidths=[90, 160, 90, 164])

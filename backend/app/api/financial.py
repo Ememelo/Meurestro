@@ -150,6 +150,29 @@ def get_financial_summary(
     if total_rev > 0:
         margin = (net_result / total_rev) * 100
 
+    # Calculate previous month balance
+    if month is not None:
+        prev_month = 12 if month == 1 else month - 1
+        prev_year = year - 1 if month == 1 else year
+    else:
+        prev_month = 12
+        prev_year = year - 1
+
+    prev_rev_sum = db.query(FinancialRevenue).filter(
+        FinancialRevenue.reference_year == prev_year,
+        FinancialRevenue.reference_month == prev_month
+    ).all()
+    prev_rev = sum(r.amount for r in prev_rev_sum)
+
+    prev_exp_sum = db.query(FinancialExpense).filter(
+        FinancialExpense.reference_year == prev_year,
+        FinancialExpense.reference_month == prev_month
+    ).all()
+    prev_exp = sum(e.amount for e in prev_exp_sum)
+
+    prev_sal = calculate_salaries_for_period(db, prev_year, prev_month)
+    prev_balance = prev_rev - (prev_exp + prev_sal)
+
     return {
         "year": year,
         "month": month,
@@ -158,6 +181,7 @@ def get_financial_summary(
         "total_salaries": total_sal,
         "net_result": net_result,
         "margin_percentage": round(margin, 2),
+        "previous_month_balance": prev_balance,
         "monthly_breakdown": monthly_breakdown
     }
 

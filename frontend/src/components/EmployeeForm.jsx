@@ -47,6 +47,9 @@ const EmployeeForm = ({ onCancel, onSuccess, employeeId }) => {
             has_disability: emp.has_disability,
             disability_details: emp.disability_details || '',
             education: emp.education,
+            ctps: emp.ctps || '',
+            pis: emp.pis || '',
+            reservista: emp.reservista || '',
             
             address_cep: emp.address_cep,
             address_street: emp.address_street,
@@ -112,6 +115,9 @@ const EmployeeForm = ({ onCancel, onSuccess, employeeId }) => {
     has_disability: false,
     disability_details: '',
     education: 'Ensino Superior Completo',
+    ctps: '',
+    pis: '',
+    reservista: '',
     
     // Address
     address_cep: '',
@@ -260,6 +266,9 @@ const EmployeeForm = ({ onCancel, onSuccess, employeeId }) => {
           has_disability: formData.has_disability,
           disability_details: formData.disability_details || null,
           education: formData.education,
+          ctps: formData.ctps || null,
+          pis: formData.pis || null,
+          reservista: formData.reservista || null,
           status: 'active',
           
           role: formData.role,
@@ -305,6 +314,9 @@ const EmployeeForm = ({ onCancel, onSuccess, employeeId }) => {
           has_disability: formData.has_disability,
           disability_details: formData.disability_details || null,
           education: formData.education,
+          ctps: formData.ctps || null,
+          pis: formData.pis || null,
+          reservista: formData.reservista || null,
           status: 'active',
           
           contract: {
@@ -448,6 +460,42 @@ const EmployeeForm = ({ onCancel, onSuccess, employeeId }) => {
                 placeholder="RG do colaborador"
                 className="form-input"
                 required
+              />
+            </div>
+
+            <div>
+              <label className="form-label">Nº CTPS</label>
+              <input
+                type="text"
+                name="ctps"
+                value={formData.ctps}
+                onChange={handleInputChange}
+                placeholder="0000000 Série 000-XX"
+                className="form-input"
+              />
+            </div>
+
+            <div>
+              <label className="form-label">Nº PIS</label>
+              <input
+                type="text"
+                name="pis"
+                value={formData.pis}
+                onChange={handleInputChange}
+                placeholder="000.00000.00-0"
+                className="form-input"
+              />
+            </div>
+
+            <div>
+              <label className="form-label">Nº Reservista</label>
+              <input
+                type="text"
+                name="reservista"
+                value={formData.reservista}
+                onChange={handleInputChange}
+                placeholder="Nº de Reservista"
+                className="form-input"
               />
             </div>
 

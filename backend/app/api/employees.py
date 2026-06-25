@@ -160,6 +160,9 @@ def create_employee(
         has_disability=emp_in.has_disability,
         disability_details=emp_in.disability_details,
         education=emp_in.education,
+        ctps=emp_in.ctps,
+        pis=emp_in.pis,
+        reservista=emp_in.reservista,
         status="active"
     )
     db.add(db_emp)
@@ -231,7 +234,7 @@ def update_employee(
         "name", "rg", "cpf", "dob", "civil_status", "nationality", "email", "phone",
         "address_cep", "address_street", "address_number", "address_complement",
         "address_neighborhood", "address_city", "address_state", "mother_name", "father_name",
-        "has_disability", "disability_details", "education"
+        "has_disability", "disability_details", "education", "ctps", "pis", "reservista"
     ]
     
     for field in personal_fields:

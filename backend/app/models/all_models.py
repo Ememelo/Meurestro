@@ -55,6 +55,10 @@ class Employee(Base):
     education = Column(String(50), nullable=False)
     status = Column(String(20), default="active", nullable=False)  # active, on_leave, terminated
     
+    ctps = Column(String(30), nullable=True)
+    pis = Column(String(30), nullable=True)
+    reservista = Column(String(30), nullable=True)
+    
     # Relationships
     dependents = relationship("Dependent", back_populates="employee", cascade="all, delete-orphan")
     contract = relationship("Contract", back_populates="employee", uselist=False, cascade="all, delete-orphan")
