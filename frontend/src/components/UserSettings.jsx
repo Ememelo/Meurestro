@@ -8,7 +8,7 @@ const UserSettings = () => {
   const isAdminMaster = user?.role === 'admin'
   const isAdminDelegado = user?.role === 'admin_delegado'
   const canManageUsers = isAdminMaster || isAdminDelegado
-  const canBackup = isAdminMaster
+  const canBackup = isAdminMaster || isAdminDelegado
 
   const [activeTab, setActiveTab] = useState('profile')
   const [selectedFolderGroup, setSelectedFolderGroup] = useState(null)

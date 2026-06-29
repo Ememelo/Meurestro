@@ -14,7 +14,7 @@ router = APIRouter(prefix="/backup", tags=["backup"])
 
 @router.get("/download")
 def download_backup(
-    current_user: User = Depends(RoleChecker(["admin"]))
+    current_user: User = Depends(RoleChecker(["admin", "admin_delegado"]))
 ):
     """
     Export database: returns the active SQLite file as a attachment download.
@@ -39,7 +39,7 @@ def download_backup(
 def restore_backup(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["admin"]))
+    current_user: User = Depends(RoleChecker(["admin", "admin_delegado"]))
 ):
     """
     Restore database: accepts an uploaded SQLite file and replaces the active lira_rh.db file.
