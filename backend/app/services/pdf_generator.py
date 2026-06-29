@@ -97,7 +97,7 @@ def generate_employee_ficha_pdf(emp: Employee) -> io.BytesIO:
     
     personal_data = [
         [Paragraph("Matrícula:", label_style), Paragraph(emp.registration_number, value_style),
-         Paragraph("Status:", label_style), Paragraph(emp.status.upper(), value_style)],
+         Paragraph("Status:", label_style), Paragraph((emp.status.upper() if emp.status else 'ATIVO'), value_style)],
         [Paragraph("Nome Completo:", label_style), Paragraph(emp.name, value_style),
          Paragraph("CPF:", label_style), Paragraph(emp.cpf, value_style)],
         [Paragraph("RG:", label_style), Paragraph(emp.rg, value_style),
@@ -310,8 +310,8 @@ def generate_financial_pdf(flow_items: list, filters_summary: str) -> io.BytesIO
     story.append(Spacer(1, 5))
     
     # Financial Summary stats first
-    total_rev = sum(item[5] for item in flow_items if item[1] == "RECEITA" and item[7].lower() == "recebido")
-    total_exp = sum(item[5] for item in flow_items if item[1] == "DESPESA" and item[7].lower() == "pago")
+    total_rev = sum(item[5] for item in flow_items if item[1] == "RECEITA" and (item[7].lower() if item[7] else '') == "recebido")
+    total_exp = sum(item[5] for item in flow_items if item[1] == "DESPESA" and (item[7].lower() if item[7] else '') == "pago")
     net_result = total_rev - total_exp
     
     summary_data = [
@@ -357,7 +357,7 @@ def generate_financial_pdf(flow_items: list, filters_summary: str) -> io.BytesIO
         partner = item[3]
         cat = item[4]
         val_str = f"R$ {item[5]:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        status_str = item[7].upper()
+        status_str = (item[7].upper() if item[7] else 'N/A')
         
         table_rows.append([
             Paragraph(date_str, value_style_center),

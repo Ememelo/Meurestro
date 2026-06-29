@@ -70,7 +70,7 @@ def export_consolidated_data_excel(db: Session, current_user: User) -> io.BytesI
         
         row_data = [
             emp.registration_number, emp.name, emp.cpf, emp.rg, emp.ctps or "", emp.pis or "", emp.reservista or "", dob, emp.email, emp.phone,
-            role, dept, adm_date, salary, emp.status.upper()
+            role, dept, adm_date, salary, (emp.status.upper() if emp.status else 'ATIVO')
         ]
         ws1.append(row_data)
         
@@ -121,7 +121,7 @@ def export_consolidated_data_excel(db: Session, current_user: User) -> io.BytesI
         emp_reg = hist.employee.registration_number if hist.employee else "N/A"
         chg_date = hist.change_date.strftime("%d/%m/%Y %H:%M")
         
-        row_data = [emp_reg, emp_name, chg_date, hist.field_name.upper(), hist.old_value, hist.new_value, hist.reason]
+        row_data = [emp_reg, emp_name, chg_date, (hist.field_name.upper() if hist.field_name else ''), hist.old_value, hist.new_value, hist.reason]
         ws2.append(row_data)
         
         for col_idx in range(1, len(headers2) + 1):
@@ -165,7 +165,7 @@ def export_consolidated_data_excel(db: Session, current_user: User) -> io.BytesI
         emp_reg = act.employee.registration_number if act.employee else "N/A"
         act_date = act.action_date.strftime("%d/%m/%Y")
         
-        row_data = [emp_reg, emp_name, act_date, act.type.upper(), act.reason, act.details, act.manager_name]
+        row_data = [emp_reg, emp_name, act_date, (act.type.upper() if act.type else ''), act.reason, act.details, act.manager_name]
         ws3.append(row_data)
         
         for col_idx in range(1, len(headers3) + 1):
@@ -334,7 +334,7 @@ def export_financial_excel(
     
     for item in flow_items:
         date_str = item[0].strftime("%d/%m/%Y") if item[0] else ""
-        row_data = [date_str, item[1], item[2], item[3], item[4], item[5], item[6], item[7].upper()]
+        row_data = [date_str, item[1], item[2], item[3], item[4], item[5], item[6], (item[7].upper() if item[7] else 'N/A')]
         ws1.append(row_data)
         
         for col_idx in range(1, len(headers1) + 1):
@@ -378,7 +378,7 @@ def export_financial_excel(
         if r.status == "Recebido":
             continue
         date_str = r.expected_date.strftime("%d/%m/%Y") if r.expected_date else (r.date.strftime("%d/%m/%Y") if r.date else "")
-        row_data = [date_str, r.description, r.client or "N/A", r.category, r.amount, r.payment_method or "N/A", r.status.upper()]
+        row_data = [date_str, r.description, r.client or "N/A", r.category, r.amount, r.payment_method or "N/A", (r.status.upper() if r.status else 'N/A')]
         ws2.append(row_data)
         
         for col_idx in range(1, len(headers2) + 1):
@@ -422,7 +422,7 @@ def export_financial_excel(
         supp_name = e.supplier.trade_name if e.supplier else "N/A"
         date_str = e.due_date.strftime("%d/%m/%Y") if e.due_date else (e.date.strftime("%d/%m/%Y") if e.date else "")
         recur_str = f"Sim ({e.recurrence_period})" if e.is_recurring else "Não"
-        row_data = [date_str, e.description, supp_name, e.category, e.amount, e.payment_method or "N/A", e.status.upper(), recur_str]
+        row_data = [date_str, e.description, supp_name, e.category, e.amount, e.payment_method or "N/A", (e.status.upper() if e.status else 'N/A'), recur_str]
         ws3.append(row_data)
         
         for col_idx in range(1, len(headers3) + 1):
@@ -491,7 +491,7 @@ def export_employee_dossier_excel(db: Session, employee_id: str, current_user: U
     ws1.title = "Cadastro Geral"
     ws1.views.sheetView[0].showGridLines = True
 
-    ws1.append([f"DOSSIÊ DO COLABORADOR - {emp.name.upper()}"])
+    ws1.append([f"DOSSIÊ DO COLABORADOR - {(emp.name.upper() if emp.name else '')}"])
     ws1.cell(1, 1).font = title_font
     ws1.append([])
 
@@ -632,10 +632,10 @@ def export_employee_dossier_excel(db: Session, employee_id: str, current_user: U
         adm_date = emp.contract.admission_date.strftime("%d/%m/%Y") if emp.contract.admission_date else ""
         row_contract = [
             emp.contract.role, emp.contract.department, adm_date, 
-            emp.contract.base_salary, emp.status.upper(), emp.contract.level or "N/A"
+            emp.contract.base_salary, (emp.status.upper() if emp.status else 'ATIVO'), emp.contract.level or "N/A"
         ]
     else:
-        row_contract = ["N/A", "N/A", "N/A", 0.0, emp.status.upper(), "N/A"]
+        row_contract = ["N/A", "N/A", "N/A", 0.0, (emp.status.upper() if emp.status else 'ATIVO'), "N/A"]
 
     ws2.append(row_contract)
     for col in range(1, len(headers_contract) + 1):
@@ -709,7 +709,7 @@ def export_employee_dossier_excel(db: Session, employee_id: str, current_user: U
         sorted_history = sorted(emp.career_history, key=lambda x: x.change_date, reverse=True)
         for idx, hist in enumerate(sorted_history, start=4):
             chg_date = hist.change_date.strftime("%d/%m/%Y %H:%M")
-            ws3.append([chg_date, hist.field_name.upper(), hist.old_value or "", hist.new_value or "", hist.reason or "", hist.changed_by_username])
+            ws3.append([chg_date, (hist.field_name.upper() if hist.field_name else ''), hist.old_value or "", hist.new_value or "", hist.reason or "", hist.changed_by_username])
             for col in range(1, len(headers_history) + 1):
                 cell = ws3.cell(row=idx, column=col)
                 cell.font = data_font
@@ -797,7 +797,7 @@ def export_employee_dossier_excel(db: Session, employee_id: str, current_user: U
             act_date = action.action_date.strftime("%d/%m/%Y") if action.action_date else ""
             dur = action.duration_days if action.duration_days else "-"
             
-            type_lbl = action.type.upper()
+            type_lbl = (action.type.upper() if action.type else '')
             if action.type == "warning": type_lbl = "ADVERTÊNCIA"
             elif action.type == "suspension": type_lbl = "SUSPENSÃO"
             elif action.type == "termination": type_lbl = "DESLIGAMENTO"
