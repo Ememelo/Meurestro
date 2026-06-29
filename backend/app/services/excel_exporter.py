@@ -449,3 +449,378 @@ def export_financial_excel(
     buffer.seek(0)
     return buffer
 
+
+def export_employee_dossier_excel(db: Session, employee_id: str, current_user: User) -> io.BytesIO:
+    """
+    Exports a comprehensive multi-tab Excel spreadsheet for a single employee containing:
+    1. Cadastro Geral (Basic Data, Address, Mother/Father, Dependents, Bank details)
+    2. Contrato & Jornada (Contract info and Shifts)
+    3. Histórico de Alterações (Career updates)
+    4. Licenças e Atestados (Leaves)
+    5. Ocorrências Disciplinares (Disciplinary actions)
+    """
+    # Fetch employee
+    emp = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not emp:
+        raise ValueError("Colaborador não encontrado.")
+
+    # Enforce tenant isolation
+    if current_user.role != "admin" and emp.group_id != current_user.group_id:
+        raise PermissionError("Acesso não autorizado aos dados desta empresa.")
+
+    wb = Workbook()
+    
+    # Styling tokens
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    title_font = Font(name="Calibri", size=14, bold=True, color="0F172A")
+    section_font = Font(name="Calibri", size=12, bold=True, color="d97706")
+    data_font = Font(name="Calibri", size=11)
+    
+    header_fill = PatternFill(start_color="0F172A", end_color="0F172A", fill_type="solid")
+    alt_row_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+    
+    thin_border = Border(
+        left=Side(style='thin', color='E2E8F0'),
+        right=Side(style='thin', color='E2E8F0'),
+        top=Side(style='thin', color='E2E8F0'),
+        bottom=Side(style='thin', color='E2E8F0')
+    )
+
+    # ----------------- TAB 1: CADASTRO GERAL -----------------
+    ws1 = wb.active
+    ws1.title = "Cadastro Geral"
+    ws1.views.sheetView[0].showGridLines = True
+
+    ws1.append([f"DOSSIÊ DO COLABORADOR - {emp.name.upper()}"])
+    ws1.cell(1, 1).font = title_font
+    ws1.append([])
+
+    # Basic Info
+    ws1.append(["DADOS PESSOAIS"])
+    ws1.cell(3, 1).font = section_font
+    
+    headers_basic = ["Matrícula", "CPF", "RG", "Sexo", "Data Nasc.", "Estado Civil", "Nacionalidade", "E-mail", "Telefone"]
+    ws1.append(headers_basic)
+    for col in range(1, len(headers_basic) + 1):
+        cell = ws1.cell(row=4, column=col)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    dob = emp.dob.strftime("%d/%m/%Y") if emp.dob else ""
+    row_basic = [
+        emp.registration_number, emp.cpf, emp.rg, emp.sex or "N/A", dob, 
+        emp.civil_status, emp.nationality, emp.email, emp.phone
+    ]
+    ws1.append(row_basic)
+    for col in range(1, len(headers_basic) + 1):
+        cell = ws1.cell(row=5, column=col)
+        cell.font = data_font
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal="center")
+
+    ws1.append([]) # Spacer
+
+    # Address & Parents
+    ws1.append(["ENDEREÇO E FILIAÇÃO"])
+    ws1.cell(7, 1).font = section_font
+
+    headers_addr = ["CEP", "Logradouro", "Número", "Complemento", "Bairro", "Cidade", "UF", "Nome da Mãe", "Nome do Pai"]
+    ws1.append(headers_addr)
+    for col in range(1, len(headers_addr) + 1):
+        cell = ws1.cell(row=8, column=col)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    row_addr = [
+        emp.address_cep, emp.address_street, emp.address_number, emp.address_complement or "", 
+        emp.address_neighborhood, emp.address_city, emp.address_state, emp.mother_name, emp.father_name or ""
+    ]
+    ws1.append(row_addr)
+    for col in range(1, len(headers_addr) + 1):
+        cell = ws1.cell(row=9, column=col)
+        cell.font = data_font
+        cell.border = thin_border
+        if col in [1, 3, 7]:
+            cell.alignment = Alignment(horizontal="center")
+
+    ws1.append([]) # Spacer
+
+    # Bank info & Docs info
+    ws1.append(["DADOS BANCÁRIOS E DOCUMENTAÇÃO COMPLEMENTAR"])
+    ws1.cell(11, 1).font = section_font
+    
+    headers_bank = ["Banco", "Agência", "Conta", "Chave Pix", "CTPS", "PIS", "Certificado Reservista"]
+    ws1.append(headers_bank)
+    for col in range(1, len(headers_bank) + 1):
+        cell = ws1.cell(row=12, column=col)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    row_bank = [
+        emp.bank_name or "N/A", emp.bank_agency or "N/A", emp.bank_account or "N/A", emp.pix_key or "N/A",
+        emp.ctps or "N/A", emp.pis or "N/A", emp.reservista or "N/A"
+    ]
+    ws1.append(row_bank)
+    for col in range(1, len(headers_bank) + 1):
+        cell = ws1.cell(row=13, column=col)
+        cell.font = data_font
+        cell.border = thin_border
+        if col in [2, 3, 5, 6, 7]:
+            cell.alignment = Alignment(horizontal="center")
+
+    ws1.append([]) # Spacer
+
+    # Dependents
+    ws1.append(["DEPENDENTES"])
+    ws1.cell(15, 1).font = section_font
+
+    headers_dep = ["Nome do Dependente", "Grau de Parentesco", "Data de Nascimento"]
+    ws1.append(headers_dep)
+    for col in range(1, len(headers_dep) + 1):
+        cell = ws1.cell(row=16, column=col)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    if not emp.dependents:
+        ws1.append(["Sem dependentes cadastrados", "", ""])
+        for col in range(1, len(headers_dep) + 1):
+            cell = ws1.cell(row=17, column=col)
+            cell.font = data_font
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="center")
+    else:
+        for idx, dep in enumerate(emp.dependents, start=17):
+            dep_dob = dep.dob.strftime("%d/%m/%Y") if dep.dob else ""
+            ws1.append([dep.name, dep.relationship, dep_dob])
+            for col in range(1, len(headers_dep) + 1):
+                cell = ws1.cell(row=idx, column=col)
+                cell.font = data_font
+                cell.border = thin_border
+                if col in [2, 3]:
+                    cell.alignment = Alignment(horizontal="center")
+
+    for col in ws1.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = col[0].column_letter
+        ws1.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+    # ----------------- TAB 2: CONTRATO E JORNADA -----------------
+    ws2 = wb.create_sheet(title="Contrato e Jornada")
+    ws2.views.sheetView[0].showGridLines = True
+
+    ws2.append(["INFORMAÇÕES CONTRATUAIS E DE JORNADA"])
+    ws2.cell(1, 1).font = title_font
+    ws2.append([])
+
+    # Contract Details
+    ws2.append(["DADOS DO CONTRATO"])
+    ws2.cell(3, 1).font = section_font
+
+    headers_contract = ["Cargo", "Departamento/Setor", "Data Admissão", "Salário Base", "Status do Contrato", "Nível"]
+    ws2.append(headers_contract)
+    for col in range(1, len(headers_contract) + 1):
+        cell = ws2.cell(row=4, column=col)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    if emp.contract:
+        adm_date = emp.contract.admission_date.strftime("%d/%m/%Y") if emp.contract.admission_date else ""
+        row_contract = [
+            emp.contract.role, emp.contract.department, adm_date, 
+            emp.contract.base_salary, emp.status.upper(), emp.contract.level or "N/A"
+        ]
+    else:
+        row_contract = ["N/A", "N/A", "N/A", 0.0, emp.status.upper(), "N/A"]
+
+    ws2.append(row_contract)
+    for col in range(1, len(headers_contract) + 1):
+        cell = ws2.cell(row=5, column=col)
+        cell.font = data_font
+        cell.border = thin_border
+        if col in [3, 5, 6]:
+            cell.alignment = Alignment(horizontal="center")
+        elif col == 4:
+            cell.number_format = '"R$" #,##0.00'
+            cell.alignment = Alignment(horizontal="right")
+
+    ws2.append([]) # Spacer
+
+    # Shift / Jornada Details
+    ws2.append(["JORNADA DE TRABALHO"])
+    ws2.cell(7, 1).font = section_font
+
+    headers_shift = ["Escala", "Horário de Entrada", "Horário de Saída", "Intervalo (Minutos)", "Banco de Horas (Minutos)"]
+    ws2.append(headers_shift)
+    for col in range(1, len(headers_shift) + 1):
+        cell = ws2.cell(row=8, column=col)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    if emp.shift:
+        row_shift = [
+            emp.shift.scale_type, emp.shift.entry_time, emp.shift.exit_time, 
+            emp.shift.interval_duration_minutes, emp.shift.bank_of_hours_minutes
+        ]
+    else:
+        row_shift = ["Não cadastrada", "N/A", "N/A", 0, 0]
+
+    ws2.append(row_shift)
+    for col in range(1, len(headers_shift) + 1):
+        cell = ws2.cell(row=9, column=col)
+        cell.font = data_font
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal="center")
+
+    for col in ws2.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = col[0].column_letter
+        ws2.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+    # ----------------- TAB 3: HISTÓRICO DE ALTERAÇÕES -----------------
+    ws3 = wb.create_sheet(title="Histórico de Alterações")
+    ws3.views.sheetView[0].showGridLines = True
+
+    ws3.append(["HISTÓRICO DE EVOLUÇÃO E ALTERAÇÕES CONTRATUAIS"])
+    ws3.cell(1, 1).font = title_font
+    ws3.append([])
+
+    headers_history = ["Data da Alteração", "Campo Alterado", "Valor Antigo", "Valor Novo", "Motivo", "Responsável"]
+    ws3.append(headers_history)
+    for col in range(1, len(headers_history) + 1):
+        cell = ws3.cell(row=3, column=col)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    if not emp.career_history:
+        ws3.append(["Sem alterações registradas no histórico", "", "", "", "", ""])
+        for col in range(1, len(headers_history) + 1):
+            cell = ws3.cell(row=4, column=col)
+            cell.font = data_font
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="center")
+    else:
+        sorted_history = sorted(emp.career_history, key=lambda x: x.change_date, reverse=True)
+        for idx, hist in enumerate(sorted_history, start=4):
+            chg_date = hist.change_date.strftime("%d/%m/%Y %H:%M")
+            ws3.append([chg_date, hist.field_name.upper(), hist.old_value or "", hist.new_value or "", hist.reason or "", hist.changed_by_username])
+            for col in range(1, len(headers_history) + 1):
+                cell = ws3.cell(row=idx, column=col)
+                cell.font = data_font
+                cell.border = thin_border
+                if col in [1, 2, 6]:
+                    cell.alignment = Alignment(horizontal="center")
+                if idx % 2 == 1:
+                    cell.fill = alt_row_fill
+
+    for col in ws3.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = col[0].column_letter
+        ws3.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+    # ----------------- TAB 4: ATESTADOS E AFASTAMENTOS -----------------
+    ws4 = wb.create_sheet(title="Afastamentos e Atestados")
+    ws4.views.sheetView[0].showGridLines = True
+
+    ws4.append(["REGISTRO DE LICENÇAS, ATESTADOS E AFASTAMENTOS"])
+    ws4.cell(1, 1).font = title_font
+    ws4.append([])
+
+    headers_leaves = ["Data de Início", "Data de Fim", "Motivo / Diagnóstico", "Comprovante Anexado"]
+    ws4.append(headers_leaves)
+    for col in range(1, len(headers_leaves) + 1):
+        cell = ws4.cell(row=3, column=col)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    if not emp.leaves:
+        ws4.append(["Sem registros de afastamentos ou atestados", "", "", ""])
+        for col in range(1, len(headers_leaves) + 1):
+            cell = ws4.cell(row=4, column=col)
+            cell.font = data_font
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="center")
+    else:
+        sorted_leaves = sorted(emp.leaves, key=lambda x: x.start_date, reverse=True)
+        for idx, leave in enumerate(sorted_leaves, start=4):
+            start = leave.start_date.strftime("%d/%m/%Y") if leave.start_date else ""
+            end = leave.end_date.strftime("%d/%m/%Y") if leave.end_date else ""
+            has_cert = "Sim" if leave.doctor_certificate_path else "Não"
+            ws4.append([start, end, leave.reason, has_cert])
+            for col in range(1, len(headers_leaves) + 1):
+                cell = ws4.cell(row=idx, column=col)
+                cell.font = data_font
+                cell.border = thin_border
+                if col in [1, 2, 4]:
+                    cell.alignment = Alignment(horizontal="center")
+                if idx % 2 == 1:
+                    cell.fill = alt_row_fill
+
+    for col in ws4.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = col[0].column_letter
+        ws4.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+    # ----------------- TAB 5: OCORRÊNCIAS DISCIPLINARES -----------------
+    ws5 = wb.create_sheet(title="Ocorrências Disciplinares")
+    ws5.views.sheetView[0].showGridLines = True
+
+    ws5.append(["REGISTRO DE OCORRÊNCIAS E MEDIDAS DISCIPLINARES"])
+    ws5.cell(1, 1).font = title_font
+    ws5.append([])
+
+    headers_disc = ["Data da Ocorrência", "Tipo de Ação", "Motivo / Infração", "Detalhes da Ação", "Duração (Dias)", "Gestor Responsável"]
+    ws5.append(headers_disc)
+    for col in range(1, len(headers_disc) + 1):
+        cell = ws5.cell(row=3, column=col)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    if not emp.disciplinary_actions:
+        ws5.append(["Sem ocorrências disciplinares registradas", "", "", "", "", ""])
+        for col in range(1, len(headers_disc) + 1):
+            cell = ws5.cell(row=4, column=col)
+            cell.font = data_font
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="center")
+    else:
+        sorted_disc = sorted(emp.disciplinary_actions, key=lambda x: x.action_date, reverse=True)
+        for idx, action in enumerate(sorted_disc, start=4):
+            act_date = action.action_date.strftime("%d/%m/%Y") if action.action_date else ""
+            dur = action.duration_days if action.duration_days else "-"
+            
+            type_lbl = action.type.upper()
+            if action.type == "warning": type_lbl = "ADVERTÊNCIA"
+            elif action.type == "suspension": type_lbl = "SUSPENSÃO"
+            elif action.type == "termination": type_lbl = "DESLIGAMENTO"
+            
+            ws5.append([act_date, type_lbl, action.reason, action.details, dur, action.manager_name])
+            for col in range(1, len(headers_disc) + 1):
+                cell = ws5.cell(row=idx, column=col)
+                cell.font = data_font
+                cell.border = thin_border
+                if col in [1, 2, 5, 6]:
+                    cell.alignment = Alignment(horizontal="center")
+                if idx % 2 == 1:
+                    cell.fill = alt_row_fill
+
+    for col in ws5.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = col[0].column_letter
+        ws5.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+    # Save to buffer
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+

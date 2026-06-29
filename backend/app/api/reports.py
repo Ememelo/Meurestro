@@ -7,7 +7,7 @@ from app.db.session import get_db
 from app.models.all_models import Employee, User, FinancialRevenue, FinancialExpense, Supplier
 from app.api.auth import get_current_user, RoleChecker
 from app.services.pdf_generator import generate_employee_ficha_pdf, generate_financial_pdf
-from app.services.excel_exporter import export_consolidated_data_excel, export_financial_excel
+from app.services.excel_exporter import export_consolidated_data_excel, export_financial_excel, export_employee_dossier_excel
 from app.services.audit_service import log_action
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -70,6 +70,40 @@ def get_consolidated_excel(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+
+@router.get("/employee/{employee_id}/excel")
+def get_employee_dossier_excel_report(
+    employee_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_reports_viewer)
+):
+    """
+    Downloads a comprehensive multi-tab Excel spreadsheet containing all info, shifts, changes,
+    leaves, and disciplinary actions for a single employee.
+    """
+    try:
+        excel_buffer = export_employee_dossier_excel(db, employee_id, current_user)
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except PermissionError as pe:
+        raise HTTPException(status_code=403, detail=str(pe))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro interno ao gerar planilha: {e}")
+
+    # Fetch employee name to name the file beautifully
+    emp = db.query(Employee).filter(Employee.id == employee_id).first()
+    safe_name = emp.name.replace(" ", "_") if emp else "colaborador"
+    filename = f"dossie_{safe_name}.xlsx"
+
+    log_action(db, current_user.id, "EXPORT_EMPLOYEE_DOSSIER_EXCEL", "employees", employee_id)
+
+    return StreamingResponse(
+        excel_buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
 
 @router.get("/financial/excel")
 def get_financial_excel_report(
