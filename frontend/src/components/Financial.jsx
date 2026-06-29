@@ -28,7 +28,7 @@ import {
   FileText
 } from 'lucide-react'
 
-const Financial = () => {
+const Financial = ({ forceSubTab }) => {
   const currentYear = new Date().getFullYear()
   const currentMonth = new Date().getMonth() + 1 // 1-indexed
 
