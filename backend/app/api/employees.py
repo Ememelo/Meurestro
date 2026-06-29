@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, s
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import get_db
-from app.models.all_models import Employee, Contract, Shift, Dependent, CareerHistory, User, Group
-from app.schemas.all_schemas import EmployeeCreate, EmployeeResponse, EmployeeListResponse, EmployeeUpdate, CareerHistoryResponse, DependentCreate, DependentResponse
+from app.models.all_models import Employee, Contract, Shift, Dependent, CareerHistory, User, Group, Sector, JobPosition, WorkScale, EmployeeDocument
+from app.schemas.all_schemas import EmployeeCreate, EmployeeResponse, EmployeeListResponse, EmployeeUpdate, CareerHistoryResponse, DependentCreate, DependentResponse, EmployeeDocumentResponse
 from app.api.auth import get_current_user, RoleChecker
 from app.services.audit_service import log_action
 
@@ -92,7 +92,7 @@ def list_employees(
 @router.get("/next-registration")
 def get_next_registration(
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["admin", "admin_delegado", "rh"]))
+    current_user: User = Depends(RoleChecker(["admin", "admin_delegado", "rh"], required_permission="has_hr_access"))
 ):
     registrations = db.query(Employee.registration_number).all()
     max_num = 0
@@ -121,7 +121,7 @@ def get_employee(
 def create_employee(
     emp_in: EmployeeCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"]))
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
 ):
     # Auto-generate or check registration number
     reg_num = emp_in.registration_number
@@ -165,6 +165,19 @@ def create_employee(
             detail="Colaborador com este CPF ou Matrícula já está cadastrado nesta empresa/grupo."
         )
         
+    role_name = emp_in.contract.role
+    dept_name = emp_in.contract.department
+    
+    if emp_in.contract.job_position_id:
+        jp = db.query(JobPosition).filter(JobPosition.id == emp_in.contract.job_position_id).first()
+        if jp:
+            role_name = jp.name
+            
+    if emp_in.contract.sector_id:
+        sec = db.query(Sector).filter(Sector.id == emp_in.contract.sector_id).first()
+        if sec:
+            dept_name = sec.name
+
     db_emp = Employee(
         group_id=group_id_to_set,
         user_id=current_user.id,
@@ -192,6 +205,12 @@ def create_employee(
         ctps=emp_in.ctps,
         pis=emp_in.pis,
         reservista=emp_in.reservista,
+        sex=emp_in.sex,
+        bank_name=emp_in.bank_name,
+        bank_agency=emp_in.bank_agency,
+        bank_account=emp_in.bank_account,
+        pix_key=emp_in.pix_key,
+        notes=emp_in.notes,
         status="active"
     )
     db.add(db_emp)
@@ -201,11 +220,16 @@ def create_employee(
     db_contract = Contract(
         employee_id=db_emp.id,
         admission_date=emp_in.contract.admission_date,
-        role=emp_in.contract.role,
-        department=emp_in.contract.department,
+        role=role_name,
+        department=dept_name,
         manager_name=emp_in.contract.manager_name,
         base_salary=emp_in.contract.base_salary,
-        benefits=emp_in.contract.benefits
+        benefits=emp_in.contract.benefits,
+        job_position_id=emp_in.contract.job_position_id,
+        sector_id=emp_in.contract.sector_id,
+        work_scale_id=emp_in.contract.work_scale_id,
+        contract_type=emp_in.contract.contract_type or "CLT",
+        status=emp_in.contract.status or "Experiência"
     )
     db.add(db_contract)
     
@@ -249,7 +273,7 @@ def update_employee(
     employee_id: str,
     emp_update: EmployeeUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"]))
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
 ):
     db_emp = check_employee_group(db, employee_id, current_user)
     if not db_emp:
@@ -263,7 +287,8 @@ def update_employee(
         "name", "rg", "cpf", "dob", "civil_status", "nationality", "email", "phone",
         "address_cep", "address_street", "address_number", "address_complement",
         "address_neighborhood", "address_city", "address_state", "mother_name", "father_name",
-        "has_disability", "disability_details", "education", "ctps", "pis", "reservista"
+        "has_disability", "disability_details", "education", "ctps", "pis", "reservista",
+        "sex", "bank_name", "bank_agency", "bank_account", "pix_key", "notes"
     ]
     
     for field in personal_fields:
@@ -282,12 +307,26 @@ def update_employee(
         
     # Update Contract and check career history triggers
     if db_emp.contract:
-        if emp_update.role is not None and emp_update.role != db_emp.contract.role:
+        if emp_update.job_position_id is not None:
+            db_emp.contract.job_position_id = emp_update.job_position_id
+            jp = db.query(JobPosition).filter(JobPosition.id == emp_update.job_position_id).first()
+            if jp and jp.name != db_emp.contract.role:
+                log_career(db, employee_id, current_user.username, "role", db_emp.contract.role, jp.name, emp_update.reason_for_change)
+                audit_changes["role"] = [db_emp.contract.role, jp.name]
+                db_emp.contract.role = jp.name
+        elif emp_update.role is not None and emp_update.role != db_emp.contract.role:
             log_career(db, employee_id, current_user.username, "role", db_emp.contract.role, emp_update.role, emp_update.reason_for_change)
             audit_changes["role"] = [db_emp.contract.role, emp_update.role]
             db_emp.contract.role = emp_update.role
             
-        if emp_update.department is not None and emp_update.department != db_emp.contract.department:
+        if emp_update.sector_id is not None:
+            db_emp.contract.sector_id = emp_update.sector_id
+            sec = db.query(Sector).filter(Sector.id == emp_update.sector_id).first()
+            if sec and sec.name != db_emp.contract.department:
+                log_career(db, employee_id, current_user.username, "department", db_emp.contract.department, sec.name, emp_update.reason_for_change)
+                audit_changes["department"] = [db_emp.contract.department, sec.name]
+                db_emp.contract.department = sec.name
+        elif emp_update.department is not None and emp_update.department != db_emp.contract.department:
             log_career(db, employee_id, current_user.username, "department", db_emp.contract.department, emp_update.department, emp_update.reason_for_change)
             audit_changes["department"] = [db_emp.contract.department, emp_update.department]
             db_emp.contract.department = emp_update.department
@@ -301,6 +340,12 @@ def update_employee(
             db_emp.contract.manager_name = emp_update.manager_name
         if emp_update.benefits is not None:
             db_emp.contract.benefits = emp_update.benefits
+        if emp_update.work_scale_id is not None:
+            db_emp.contract.work_scale_id = emp_update.work_scale_id
+        if emp_update.contract_type is not None:
+            db_emp.contract.contract_type = emp_update.contract_type
+        if emp_update.contract_status is not None:
+            db_emp.contract.status = emp_update.contract_status
             
     db.commit()
     db.refresh(db_emp)
@@ -316,7 +361,7 @@ def upload_photo(
     employee_id: str,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"]))
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
 ):
     emp = check_employee_group(db, employee_id, current_user)
     if not emp:
@@ -354,21 +399,30 @@ def get_employee_career_history(
 def delete_employee(
     employee_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"]))
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
 ):
     emp = check_employee_group(db, employee_id, current_user)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Colaborador não encontrado.")
+    
+    # Soft delete (status = terminated)
+    old_status = emp.status
+    emp.status = "terminated"
+    
+    if emp.contract:
+        emp.contract.status = "Desligado"
         
-    db.delete(emp)
+    log_career(db, employee_id, current_user.username, "status", old_status, "terminated", "Demissão/Desligamento pelo RH")
     db.commit()
     
-    log_action(db, current_user.id, "DELETE_EMPLOYEE", "employees", employee_id, {"name": emp.name})
-    return {"message": "Cadastro do colaborador excluído com sucesso."}
+    log_action(db, current_user.id, "DELETE_EMPLOYEE_SOFT", "employees", employee_id, {"name": emp.name, "status": "terminated"})
+    return {"message": "Cadastro do colaborador alterado para Desligado com sucesso."}
 
 @router.delete("/dependent/{dependent_id}")
 def delete_dependent(
     dependent_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"]))
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
 ):
     query_dep = db.query(Dependent).join(Employee).filter(Dependent.id == dependent_id)
     if current_user.role != "admin":
@@ -386,7 +440,7 @@ def add_dependent(
     employee_id: str,
     dep_in: DependentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"]))
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
 ):
     emp = check_employee_group(db, employee_id, current_user)
     db_dep = Dependent(
@@ -406,7 +460,7 @@ def update_dependent(
     dependent_id: str,
     dep_in: DependentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"]))
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
 ):
     query_dep = db.query(Dependent).join(Employee).filter(Dependent.id == dependent_id)
     if current_user.role != "admin":
@@ -421,5 +475,165 @@ def update_dependent(
     db.refresh(dep)
     log_action(db, current_user.id, "UPDATE_DEPENDENT", "dependents", dependent_id)
     return dep
+
+
+# List Employee Documents
+@router.get("/{employee_id}/documents", response_model=List[EmployeeDocumentResponse])
+def list_employee_documents(
+    employee_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    check_employee_group(db, employee_id, current_user)
+    return db.query(EmployeeDocument).filter(EmployeeDocument.employee_id == employee_id).all()
+
+
+# Create/Upload Employee Document
+@router.post("/{employee_id}/documents", response_model=EmployeeDocumentResponse)
+def upload_employee_document(
+    employee_id: str,
+    document_type: str = Form(...),
+    status: str = Form("Pendente"),
+    due_date: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
+):
+    emp = check_employee_group(db, employee_id, current_user)
+    
+    parsed_due_date = None
+    if due_date and due_date != "null" and due_date != "":
+        try:
+            parsed_due_date = date.fromisoformat(due_date)
+        except ValueError:
+            pass
+
+    file_path = None
+    if file:
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in [".pdf", ".jpg", ".jpeg", ".png", ".docx", ".doc"]:
+            raise HTTPException(status_code=400, detail="Formato de arquivo inválido.")
+            
+        os.makedirs(os.path.join(settings.UPLOAD_DIR, "documents"), exist_ok=True)
+        filename = f"{employee_id}_{uuid.uuid4().hex}{ext}"
+        dest_path = os.path.join(settings.UPLOAD_DIR, "documents", filename)
+        
+        with open(dest_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        file_path = f"/uploads/documents/{filename}"
+
+    from datetime import datetime
+    db_doc = EmployeeDocument(
+        employee_id=employee_id,
+        document_type=document_type,
+        file_path=file_path,
+        status=status,
+        due_date=parsed_due_date,
+        created_by=current_user.username,
+        updated_by=current_user.username
+    )
+    db.add(db_doc)
+    db.commit()
+    db.refresh(db_doc)
+    
+    log_action(db, current_user.id, "UPLOAD_DOCUMENT", "employee_documents", db_doc.id, {"document_type": document_type})
+    return db_doc
+
+
+# Update Employee Document
+@router.put("/{employee_id}/documents/{document_id}", response_model=EmployeeDocumentResponse)
+def update_employee_document(
+    employee_id: str,
+    document_id: str,
+    document_type: Optional[str] = Form(None),
+    status: Optional[str] = Form(None),
+    due_date: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
+):
+    emp = check_employee_group(db, employee_id, current_user)
+    db_doc = db.query(EmployeeDocument).filter(
+        EmployeeDocument.id == document_id, 
+        EmployeeDocument.employee_id == employee_id
+    ).first()
+    if not db_doc:
+        raise HTTPException(status_code=404, detail="Documento não encontrado.")
+        
+    if document_type is not None:
+        db_doc.document_type = document_type
+    if status is not None:
+        db_doc.status = status
+    if due_date is not None:
+        if due_date == "null" or due_date == "":
+            db_doc.due_date = None
+        else:
+            try:
+                db_doc.due_date = date.fromisoformat(due_date)
+            except ValueError:
+                pass
+                
+    if file:
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in [".pdf", ".jpg", ".jpeg", ".png", ".docx", ".doc"]:
+            raise HTTPException(status_code=400, detail="Formato de arquivo inválido.")
+            
+        os.makedirs(os.path.join(settings.UPLOAD_DIR, "documents"), exist_ok=True)
+        filename = f"{employee_id}_{uuid.uuid4().hex}{ext}"
+        dest_path = os.path.join(settings.UPLOAD_DIR, "documents", filename)
+        
+        with open(dest_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        # Delete old file if exists
+        if db_doc.file_path:
+            old_file = os.path.join(settings.UPLOAD_DIR, "..", db_doc.file_path.lstrip("/"))
+            if os.path.exists(old_file):
+                try:
+                    os.remove(old_file)
+                except Exception:
+                    pass
+                    
+        db_doc.file_path = f"/uploads/documents/{filename}"
+        
+    from datetime import datetime
+    db_doc.updated_by = current_user.username
+    db_doc.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(db_doc)
+    log_action(db, current_user.id, "UPDATE_DOCUMENT", "employee_documents", document_id)
+    return db_doc
+
+
+# Delete Employee Document
+@router.delete("/{employee_id}/documents/{document_id}")
+def delete_employee_document(
+    employee_id: str,
+    document_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
+):
+    emp = check_employee_group(db, employee_id, current_user)
+    db_doc = db.query(EmployeeDocument).filter(
+        EmployeeDocument.id == document_id, 
+        EmployeeDocument.employee_id == employee_id
+    ).first()
+    if not db_doc:
+        raise HTTPException(status_code=404, detail="Documento não encontrado.")
+        
+    if db_doc.file_path:
+        old_file = os.path.join(settings.UPLOAD_DIR, "..", db_doc.file_path.lstrip("/"))
+        if os.path.exists(old_file):
+            try:
+                os.remove(old_file)
+            except Exception:
+                pass
+                
+    db.delete(db_doc)
+    db.commit()
+    log_action(db, current_user.id, "DELETE_DOCUMENT", "employee_documents", document_id)
+    return {"message": "Documento excluído com sucesso."}
 
 

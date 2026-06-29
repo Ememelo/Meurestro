@@ -15,6 +15,13 @@ class Settings:
     # Storage
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "./uploads")
     
+    # SMTP Settings for Backups
+    SMTP_SERVER: str = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USERNAME: str = os.getenv("SMTP_USERNAME", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    SMTP_FROM: str = os.getenv("SMTP_FROM", "backup@meuresto.com.br")
+    
     # Ensure upload directory exists
     @classmethod
     def initialize(cls):

@@ -17,7 +17,7 @@ import {
 
 const Dashboard = () => {
   const { user } = useAuth()
-  const isSocioOrAdmin = user?.role === 'admin' || user?.role === 'socio'
+  const isSocioOrAdmin = ['admin', 'admin_delegado', 'socio', 'gestor', 'financeiro'].includes(user?.role) || user?.has_financial_access || false
 
   const currentYear = new Date().getFullYear()
   const [year, setYear] = useState(currentYear)

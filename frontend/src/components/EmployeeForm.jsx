@@ -7,6 +7,9 @@ const EmployeeForm = ({ onCancel, onSuccess, employeeId }) => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [reasonForChange, setReasonForChange] = useState('')
+  const [sectorsList, setSectorsList] = useState([])
+  const [jobPositionsList, setJobPositionsList] = useState([])
+  const [workScalesList, setWorkScalesList] = useState([])
 
   useEffect(() => {
     if (employeeId) {
@@ -82,6 +85,16 @@ const EmployeeForm = ({ onCancel, onSuccess, employeeId }) => {
             interval_duration_minutes: emp.shift?.interval_duration_minutes || 60,
             bank_of_hours_minutes: emp.shift?.bank_of_hours_minutes || 0,
             
+            sex: emp.sex || 'Masculino',
+            bank_name: emp.bank_name || '',
+            bank_agency: emp.bank_agency || '',
+            bank_account: emp.bank_account || '',
+            pix_key: emp.pix_key || '',
+            notes: emp.notes || '',
+            sector_id: emp.contract?.sector_id || '',
+            job_position_id: emp.contract?.job_position_id || '',
+            work_scale_id: emp.contract?.work_scale_id || '',
+            
             dependents: emp.dependents || []
           })
           setLoading(false)
@@ -106,6 +119,24 @@ const EmployeeForm = ({ onCancel, onSuccess, employeeId }) => {
       fetchNextReg()
     }
   }, [employeeId])
+
+  useEffect(() => {
+    const fetchMetadata = async () => {
+      try {
+        const [secRes, jobRes, scaleRes] = await Promise.all([
+          api.get('/sectors'),
+          api.get('/job-positions'),
+          api.get('/work-scales')
+        ])
+        setSectorsList(secRes.data.filter(s => s.is_active))
+        setJobPositionsList(jobRes.data.filter(j => j.is_active))
+        setWorkScalesList(scaleRes.data.filter(w => w.is_active))
+      } catch (err) {
+        console.error('Erro ao carregar dados auxiliares de RH:', err)
+      }
+    }
+    fetchMetadata()
+  }, [])
   
   // Form State
   const [formData, setFormData] = useState({
@@ -127,6 +158,12 @@ const EmployeeForm = ({ onCancel, onSuccess, employeeId }) => {
     ctps: '',
     pis: '',
     reservista: '',
+    sex: 'Masculino',
+    bank_name: '',
+    bank_agency: '',
+    bank_account: '',
+    pix_key: '',
+    notes: '',
     
     // Address
     address_cep: '',
@@ -141,6 +178,9 @@ const EmployeeForm = ({ onCancel, onSuccess, employeeId }) => {
     admission_date: '',
     role: '',
     department: 'Cozinha',
+    job_position_id: '',
+    sector_id: '',
+    work_scale_id: '',
     manager_name: '',
     base_salary: '',
     
@@ -299,10 +339,19 @@ const EmployeeForm = ({ onCancel, onSuccess, employeeId }) => {
           ctps: formData.ctps || null,
           pis: formData.pis || null,
           reservista: formData.reservista || null,
+          sex: formData.sex,
+          bank_name: formData.bank_name || null,
+          bank_agency: formData.bank_agency || null,
+          bank_account: formData.bank_account || null,
+          pix_key: formData.pix_key || null,
+          notes: formData.notes || null,
           status: 'active',
           
           role: formData.role,
           department: formData.department,
+          job_position_id: formData.job_position_id || null,
+          sector_id: formData.sector_id || null,
+          work_scale_id: formData.work_scale_id || null,
           manager_name: formData.manager_name || null,
           base_salary: parseFloat(formData.base_salary),
           benefits: JSON.stringify(activeBenefits),
@@ -347,12 +396,21 @@ const EmployeeForm = ({ onCancel, onSuccess, employeeId }) => {
           ctps: formData.ctps || null,
           pis: formData.pis || null,
           reservista: formData.reservista || null,
+          sex: formData.sex,
+          bank_name: formData.bank_name || null,
+          bank_agency: formData.bank_agency || null,
+          bank_account: formData.bank_account || null,
+          pix_key: formData.pix_key || null,
+          notes: formData.notes || null,
           status: 'active',
           
           contract: {
             admission_date: formData.admission_date,
             role: formData.role,
             department: formData.department,
+            job_position_id: formData.job_position_id || null,
+            sector_id: formData.sector_id || null,
+            work_scale_id: formData.work_scale_id || null,
             manager_name: formData.manager_name || null,
             base_salary: parseFloat(formData.base_salary),
             benefits: JSON.stringify(activeBenefits)
@@ -542,6 +600,20 @@ const EmployeeForm = ({ onCancel, onSuccess, employeeId }) => {
             </div>
 
             <div>
+              <label className="form-label">Sexo</label>
+              <select
+                name="sex"
+                value={formData.sex}
+                onChange={handleInputChange}
+                className="form-input cursor-pointer"
+              >
+                <option value="Masculino">Masculino</option>
+                <option value="Feminino">Feminino</option>
+                <option value="Outro">Outro</option>
+              </select>
+            </div>
+
+            <div>
               <label className="form-label">Estado Civil</label>
               <select
                 name="civil_status"
@@ -660,6 +732,68 @@ const EmployeeForm = ({ onCancel, onSuccess, employeeId }) => {
                 />
               </div>
             )}
+
+            {/* Bank details and notes */}
+            <div className="md:col-span-3 border-t border-slate-100 pt-6 mt-4">
+              <h4 className="text-xs font-bold text-amber-600 uppercase tracking-widest mb-4">Dados Bancários & Observações</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                <div>
+                  <label className="form-label">Banco</label>
+                  <input
+                    type="text"
+                    name="bank_name"
+                    value={formData.bank_name}
+                    onChange={handleInputChange}
+                    placeholder="Ex: Itaú, Bradesco"
+                    className="form-input"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Agência</label>
+                  <input
+                    type="text"
+                    name="bank_agency"
+                    value={formData.bank_agency}
+                    onChange={handleInputChange}
+                    placeholder="Ex: 1234"
+                    className="form-input"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Conta Corrente/Poupança</label>
+                  <input
+                    type="text"
+                    name="bank_account"
+                    value={formData.bank_account}
+                    onChange={handleInputChange}
+                    placeholder="Ex: 12345-6"
+                    className="form-input"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Chave PIX</label>
+                  <input
+                    type="text"
+                    name="pix_key"
+                    value={formData.pix_key}
+                    onChange={handleInputChange}
+                    placeholder="E-mail, CPF, celular ou aleatória"
+                    className="form-input"
+                  />
+                </div>
+                <div className="md:col-span-4">
+                  <label className="form-label">Observações Internas (Notas)</label>
+                  <textarea
+                    name="notes"
+                    value={formData.notes}
+                    onChange={handleInputChange}
+                    placeholder="Observações ou anotações internas adicionais sobre este colaborador..."
+                    rows={3}
+                    className="form-input"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -785,32 +919,54 @@ const EmployeeForm = ({ onCancel, onSuccess, employeeId }) => {
                 </div>
 
                 <div>
-                  <label className="form-label">Cargo / Função (Obrigatório)</label>
-                  <input
-                    type="text"
-                    name="role"
-                    value={formData.role}
-                    onChange={handleInputChange}
-                    placeholder="Advogado Júnior, Analista..."
-                    className="form-input"
-                    required
-                  />
+                  <label className="form-label">Setor / Departamento</label>
+                  <select
+                    name="sector_id"
+                    value={formData.sector_id}
+                    onChange={(e) => {
+                      const secId = e.target.value
+                      const secName = sectorsList.find(s => s.id === secId)?.name || ''
+                      setFormData(prev => ({
+                        ...prev,
+                        sector_id: secId,
+                        department: secName,
+                        job_position_id: '' // reset job position when sector changes
+                      }))
+                    }}
+                    className="form-input cursor-pointer"
+                  >
+                    <option value="">Selecione um Setor...</option>
+                    {sectorsList.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
-                  <label className="form-label">Departamento</label>
+                  <label className="form-label">Cargo / Função (Obrigatório)</label>
                   <select
-                    name="department"
-                    value={formData.department}
-                    onChange={handleInputChange}
+                    name="job_position_id"
+                    value={formData.job_position_id}
+                    required
+                    onChange={(e) => {
+                      const jpId = e.target.value
+                      const jp = jobPositionsList.find(j => j.id === jpId)
+                      setFormData(prev => ({
+                        ...prev,
+                        job_position_id: jpId,
+                        role: jp ? jp.name : '',
+                        base_salary: jp ? String(jp.base_salary) : prev.base_salary
+                      }))
+                    }}
                     className="form-input cursor-pointer"
                   >
-                    <option value="Cozinha">Cozinha</option>
-                    <option value="Salão">Salão</option>
-                    <option value="Copa / Bar">Copa / Bar</option>
-                    <option value="Delivery">Delivery</option>
-                    <option value="Administrativo">Administrativo</option>
-                    <option value="Serviços Gerais">Serviços Gerais</option>
+                    <option value="">Selecione um Cargo...</option>
+                    {jobPositionsList
+                      .filter(j => !formData.sector_id || j.sector_id === formData.sector_id)
+                      .map(j => (
+                        <option key={j.id} value={j.id}>{j.name} ({j.level})</option>
+                      ))
+                    }
                   </select>
                 </div>
 
@@ -909,17 +1065,30 @@ const EmployeeForm = ({ onCancel, onSuccess, employeeId }) => {
               <h3 className="text-xs font-bold text-amber-600 uppercase tracking-widest border-b border-slate-100 pb-2 mb-4">Jornada de Trabalho</h3>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div>
-                  <label className="form-label">Escala / Tipo</label>
+                  <label className="form-label">Escala Padrão</label>
                   <select
-                    name="scale_type"
-                    value={formData.scale_type}
-                    onChange={handleInputChange}
+                    name="work_scale_id"
+                    value={formData.work_scale_id}
+                    onChange={(e) => {
+                      const wsId = e.target.value
+                      const ws = workScalesList.find(w => w.id === wsId)
+                      setFormData(prev => ({
+                        ...prev,
+                        work_scale_id: wsId,
+                        scale_type: ws ? ws.name : prev.scale_type,
+                        entry_time: ws ? ws.entry_time : prev.entry_time,
+                        exit_time: ws ? ws.exit_time : prev.exit_time,
+                        interval_duration_minutes: ws ? ws.interval_minutes : prev.interval_duration_minutes
+                      }))
+                    }}
                     className="form-input cursor-pointer"
                   >
-                    <option value="5x2">5x2 (Seg a Sex)</option>
-                    <option value="6x1">6x1 (Seg a Sáb)</option>
-                    <option value="12x36">12x36 (Dia Sim, Dia Não)</option>
-                    <option value="Flexível">Flexível</option>
+                    <option value="">Selecione uma Escala...</option>
+                    {workScalesList.map(w => (
+                      <option key={w.id} value={w.id}>
+                        {w.name} ({w.entry_time} às {w.exit_time})
+                      </option>
+                    ))}
                   </select>
                 </div>
 

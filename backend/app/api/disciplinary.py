@@ -17,7 +17,7 @@ from app.api.employees import check_employee_group
 def create_disciplinary_action(
     action_in: DisciplinaryActionCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"]))
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
 ):
     emp = check_employee_group(db, action_in.employee_id, current_user)
         
@@ -77,7 +77,7 @@ def get_employee_disciplinary_actions(
 def create_leave(
     leave_in: LeaveCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"]))
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
 ):
     emp = check_employee_group(db, leave_in.employee_id, current_user)
         
@@ -130,7 +130,7 @@ def get_employee_leaves(
 def delete_disciplinary_action(
     action_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"]))
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
 ):
     query = db.query(DisciplinaryAction).join(Employee).filter(DisciplinaryAction.id == action_id)
     if current_user.role != "admin":
@@ -147,7 +147,7 @@ def delete_disciplinary_action(
 def delete_leave(
     leave_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"]))
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
 ):
     query = db.query(Leave).join(Employee).filter(Leave.id == leave_id)
     if current_user.role != "admin":
@@ -165,7 +165,7 @@ def update_disciplinary_action(
     action_id: str,
     action_in: DisciplinaryActionCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"]))
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
 ):
     query = db.query(DisciplinaryAction).join(Employee).filter(DisciplinaryAction.id == action_id)
     if current_user.role != "admin":
@@ -189,7 +189,7 @@ def update_leave(
     leave_id: str,
     leave_in: LeaveCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"]))
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
 ):
     query = db.query(Leave).join(Employee).filter(Leave.id == leave_id)
     if current_user.role != "admin":

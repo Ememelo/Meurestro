@@ -275,4 +275,109 @@ def get_dashboard_data(
         }
     }
 
+@router.get("/hr")
+def get_hr_dashboard_data(
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    import calendar
+    from datetime import date
+    
+    today = date.today()
+    if year is None:
+        year = today.year
+    if month is None:
+        month = today.month
+        
+    _, last_day = calendar.monthrange(year, month)
+    period_start = date(year, month, 1)
+    period_end = date(year, month, last_day)
+
+    query_emp = db.query(Employee)
+    if current_user.role != "admin":
+        query_emp = query_emp.filter(Employee.group_id == current_user.group_id)
+    all_employees = query_emp.all()
+    
+    total_colab = 0
+    ativos = 0
+    afastados = 0
+    experiencia = 0
+    aniversariantes = 0
+    admissoes = 0
+    desligamentos = 0
+    
+    for emp in all_employees:
+        # Check active status
+        if emp.status != "terminated":
+            total_colab += 1
+            if emp.contract:
+                c_status = emp.contract.status
+                if c_status == "Ativo" or emp.status == "active":
+                    ativos += 1
+                elif c_status == "Afastado" or emp.status == "on_leave":
+                    afastados += 1
+                elif c_status == "Experiência":
+                    experiencia += 1
+                else:
+                    ativos += 1
+            else:
+                ativos += 1
+                
+        # Birthday this month
+        if emp.dob and emp.dob.month == month:
+            aniversariantes += 1
+            
+        # Admitted this month
+        if emp.contract and emp.contract.admission_date:
+            adm_d = emp.contract.admission_date
+            if adm_d.year == year and adm_d.month == month:
+                admissoes += 1
+                
+        # Terminated this month
+        if emp.status == "terminated":
+            term_action = db.query(DisciplinaryAction).filter(
+                DisciplinaryAction.employee_id == emp.id,
+                DisciplinaryAction.type == "termination"
+            ).first()
+            if term_action and term_action.action_date.year == year and term_action.action_date.month == month:
+                desligamentos += 1
+
+    # Charts calculation
+    dept_counts = {}
+    role_counts = {}
+    contract_counts = {}
+    
+    for emp in all_employees:
+        if emp.status != "terminated" and emp.contract:
+            dept = emp.contract.department or "Cozinha"
+            role = emp.contract.role or "Auxiliar"
+            c_type = emp.contract.contract_type or "CLT"
+            
+            dept_counts[dept] = dept_counts.get(dept, 0) + 1
+            role_counts[role] = role_counts.get(role, 0) + 1
+            contract_counts[c_type] = contract_counts.get(c_type, 0) + 1
+            
+    by_department = [{"name": k, "count": v} for k, v in dept_counts.items()]
+    by_role = [{"name": k, "count": v} for k, v in role_counts.items()]
+    by_contract_type = [{"name": k, "count": v} for k, v in contract_counts.items()]
+
+    return {
+        "kpis": {
+            "total_employees": total_colab,
+            "active_employees": ativos,
+            "on_leave_employees": afastados,
+            "probation_employees": experiencia,
+            "birthdays_this_month": aniversariantes,
+            "admissions_this_month": admissoes,
+            "terminations_this_month": desligamentos
+        },
+        "charts": {
+            "by_department": by_department,
+            "by_role": by_role,
+            "by_contract_type": by_contract_type
+        }
+    }
+
 

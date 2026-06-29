@@ -15,7 +15,13 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 from app.api.employees import check_employee_group
 
 def check_reports_viewer(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role in ["admin", "admin_delegado", "rh", "socio"]:
+    if current_user.role in ["admin", "admin_delegado"]:
+        return current_user
+    if current_user.reports_access in ["read", "write"]:
+        return current_user
+    if current_user.role in ["rh", "socio", "gestor", "financeiro"] and current_user.reports_access != "none":
+        return current_user
+    if current_user.has_reports_access:
         return current_user
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,

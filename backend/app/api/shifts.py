@@ -30,7 +30,7 @@ def update_employee_shift(
     employee_id: str,
     shift_in: ShiftBase,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"]))
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
 ):
     emp = check_employee_group(db, employee_id, current_user)
     if not emp:
@@ -60,7 +60,7 @@ def update_employee_shift(
 def launch_overtime(
     overtime_in: OvertimeCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"]))
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
 ):
     emp = check_employee_group(db, overtime_in.employee_id, current_user)
     if not emp:
@@ -120,7 +120,7 @@ def update_overtime_status(
     overtime_id: str,
     status_update: OvertimeUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"]))
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
 ):
     query = db.query(Overtime).join(Employee).filter(Overtime.id == overtime_id)
     if current_user.role != "admin":
@@ -148,7 +148,7 @@ def update_overtime_status(
 def delete_overtime(
     overtime_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"]))
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
 ):
     query = db.query(Overtime).join(Employee).filter(Overtime.id == overtime_id)
     if current_user.role != "admin":
@@ -166,7 +166,7 @@ def edit_overtime(
     overtime_id: str,
     overtime_in: OvertimeCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"]))
+    current_user: User = Depends(RoleChecker(["rh", "admin", "admin_delegado"], required_permission="has_hr_access"))
 ):
     query = db.query(Overtime).join(Employee).filter(Overtime.id == overtime_id)
     if current_user.role != "admin":

@@ -74,10 +74,21 @@ def generate_employee_ficha_pdf(emp: Employee) -> io.BytesIO:
         textColor=TEXT_COLOR
     )
 
-    # 1. Header Title
-    story.append(Paragraph("MEURESTÔ", title_style))
-    story.append(Paragraph("Ficha de Registro de Colaborador", subtitle_style))
-    story.append(Spacer(1, 10))
+    # 1. Header Title (Branded)
+    header_data = [
+        [
+            Paragraph("<b>MEURESTÔ</b><br/><font size=8 color='#d97706'>GESTÃO DE RESTAURANTE</font>", ParagraphStyle('HLogo1', parent=title_style, fontSize=16, leading=18)),
+            Paragraph("<font size=11 color='#0f172a'><b>FICHA DE REGISTRO DE COLABORADOR</b></font><br/><font size=8 color='#64748b'>RECURSOS HUMANOS</font>", ParagraphStyle('HTitle1', parent=title_style, alignment=2, fontSize=11, leading=13))
+        ]
+    ]
+    header_table = Table(header_data, colWidths=[240, 264])
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+        ('LINEBELOW', (0,0), (-1,-1), 1.5, PRIMARY_COLOR),
+    ]))
+    story.append(header_table)
+    story.append(Spacer(1, 12))
     
     # 2. Section: Dados Pessoais
     story.append(Paragraph("DADOS PESSOAIS", section_style))
@@ -280,9 +291,23 @@ def generate_financial_pdf(flow_items: list, filters_summary: str) -> io.BytesIO
         alignment=2 # Right
     )
 
-    story.append(Paragraph("MEURESTÔ ERP - RELATÓRIO FINANCEIRO", title_style))
-    story.append(Paragraph(f"Filtros: {filters_summary}", subtitle_style))
-    story.append(Spacer(1, 10))
+    # 1. Header Title (Branded)
+    header_data = [
+        [
+            Paragraph("<b>MEURESTÔ</b><br/><font size=8 color='#d97706'>GESTÃO DE RESTAURANTE</font>", ParagraphStyle('HLogo2', parent=title_style, fontSize=16, leading=18)),
+            Paragraph("<font size=11 color='#0f172a'><b>RELATÓRIO FINANCEIRO</b></font><br/><font size=8 color='#64748b'>DEMONSTRATIVO DE FLUXO DE CAIXA</font>", ParagraphStyle('HTitle2', parent=title_style, alignment=2, fontSize=11, leading=13))
+        ]
+    ]
+    header_table = Table(header_data, colWidths=[250, 282])
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+        ('LINEBELOW', (0,0), (-1,-1), 1.5, PRIMARY_COLOR),
+    ]))
+    story.append(header_table)
+    story.append(Spacer(1, 8))
+    story.append(Paragraph(f"<b>Filtros aplicados:</b> {filters_summary}", subtitle_style))
+    story.append(Spacer(1, 5))
     
     # Financial Summary stats first
     total_rev = sum(item[5] for item in flow_items if item[1] == "RECEITA" and item[7].lower() == "recebido")

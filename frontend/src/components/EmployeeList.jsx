@@ -47,7 +47,7 @@ const EmployeeList = ({ onSelectEmployee, onAddNew, onEditEmployee, onDeleteEmpl
     }
   }
 
-  const canEdit = user?.role === 'rh' || user?.role === 'admin'
+  const canEdit = user?.role === 'admin' || user?.role === 'admin_delegado' || user?.hr_access === 'write' || (user?.role === 'rh' && (!user?.hr_access || user?.hr_access === 'write'))
 
   const getStatusBadgeClass = (status) => {
     const classes = {

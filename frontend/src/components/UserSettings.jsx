@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
-import { Shield, Key, UserPlus, Users, AlertCircle, CheckCircle2, Power, Eye, EyeOff, Database, Download, Upload, Smartphone, Wifi, Trash2, Edit2, PlusCircle } from 'lucide-react'
+import { Shield, Key, UserPlus, Users, AlertCircle, CheckCircle2, Power, Eye, EyeOff, Database, Download, Upload, Smartphone, Wifi, Trash2, Edit2, PlusCircle, ChevronDown, FolderKanban, ChevronRight } from 'lucide-react'
 
 const UserSettings = () => {
   const { user } = useAuth()
@@ -11,6 +11,7 @@ const UserSettings = () => {
   const canBackup = isAdminMaster
 
   const [activeTab, setActiveTab] = useState('profile')
+  const [selectedFolderGroup, setSelectedFolderGroup] = useState(null)
   const [localIp, setLocalIp] = useState('127.0.0.1')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -41,6 +42,7 @@ const UserSettings = () => {
   // User List State
   const [usersList, setUsersList] = useState([])
   const [fetchingUsers, setFetchingUsers] = useState(false)
+  const [openPopoverId, setOpenPopoverId] = useState(null)
 
   // Groups/Tenants State (Admin Master only)
   const [activeGroups, setActiveGroups] = useState([])
@@ -296,6 +298,15 @@ const UserSettings = () => {
       fetchUsers()
     } catch (err) {
       alert(err.response?.data?.detail || 'Erro ao alterar o acesso financeiro do usuário.')
+    }
+  }
+
+  const handleUpdateUserPermissions = async (userId, permissions) => {
+    try {
+      await api.put(`/auth/users/${userId}/permissions`, permissions)
+      fetchUsers()
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Erro ao atualizar as permissões do usuário.')
     }
   }
 
@@ -796,146 +807,320 @@ const UserSettings = () => {
                 </div>
               ) : usersList.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-8">Nenhum usuário carregado.</p>
+              ) : isAdminMaster && !selectedFolderGroup ? (
+                /* FOLDER VIEW FOR ADMIN MASTER */
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+                  {activeGroups.map((g) => {
+                    const groupUsersCount = usersList.filter(u => u.group_id === g.id).length
+                    return (
+                      <div 
+                        key={g.id}
+                        onClick={() => setSelectedFolderGroup(g)}
+                        className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-amber-500 transition-all cursor-pointer flex items-center gap-4 group"
+                      >
+                        <div className="p-3.5 bg-amber-50 rounded-xl text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-all">
+                          <FolderKanban className="w-8 h-8" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-extrabold text-slate-800 text-sm truncate group-hover:text-amber-600 transition-all">{g.name}</h4>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">{groupUsersCount} Usuário{groupUsersCount !== 1 ? 's' : ''}</p>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-slate-400 group-hover:translate-x-1 transition-all" />
+                      </div>
+                    )
+                  })}
+                  
+                  {/* Sem Grupo Folder */}
+                  {usersList.some(u => !u.group_id && u.role !== 'admin') && (
+                    <div 
+                      onClick={() => setSelectedFolderGroup({ id: 'sem_grupo', name: 'Usuários Sem Grupo' })}
+                      className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-amber-500 transition-all cursor-pointer flex items-center gap-4 group"
+                    >
+                      <div className="p-3.5 bg-slate-50 rounded-xl text-slate-500 group-hover:bg-slate-500 group-hover:text-white transition-all">
+                        <FolderKanban className="w-8 h-8" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-extrabold text-slate-800 text-sm truncate">Sem Grupo</h4>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                          {usersList.filter(u => !u.group_id && u.role !== 'admin').length} Usuários
+                        </p>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-slate-450 group-hover:translate-x-1 transition-all" />
+                    </div>
+                  )}
+                </div>
               ) : (
-                <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase">
-                        <th className="px-4 py-3">Usuário</th>
-                        {isAdminMaster && <th className="px-4 py-3">Grupo/Empresa</th>}
-                        <th className="px-4 py-3">E-mail</th>
-                        <th className="px-4 py-3">Perfil de Acesso</th>
-                        <th className="px-4 py-3 text-center">Acesso Financeiro</th>
-                        <th className="px-4 py-3 text-center">Status</th>
-                        <th className="px-4 py-3 text-center">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {usersList.map((u) => {
-                        const isSelf = u.username === user.username
-                        const groupName = activeGroups.find(g => g.id === u.group_id)?.name || 'Sem Grupo'
-                        return (
-                          <tr key={u.id} className="hover:bg-slate-50">
-                            <td className="px-4 py-3 font-bold text-slate-800 flex items-center gap-2">
-                              {u.username}
-                              {isSelf && (
-                                <span className="inline-block px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded text-[9px] font-bold">
-                                  Você
-                                </span>
-                              )}
-                              {u.password_reset_requested && (
-                                <span className="inline-block px-1.5 py-0.2 bg-red-105 border border-red-200 text-red-700 rounded text-[9px] font-bold animate-pulse">
-                                  Solicitou Reset
-                                </span>
-                              )}
-                            </td>
-                            {isAdminMaster && (
-                              <td className="px-4 py-3 font-semibold text-slate-700">
-                                {isSelf || u.role === 'admin' ? (
-                                  <span className="text-slate-500">{groupName}</span>
-                                ) : (
-                                  <select
-                                    value={u.group_id || ''}
-                                    onChange={(e) => handleUpdateUserGroup(u.id, e.target.value)}
-                                    className="px-2 py-1 bg-slate-950 border border-slate-800 rounded text-slate-100 text-[10px] focus:outline-none focus:ring-1 focus:ring-amber-500 font-semibold cursor-pointer"
-                                  >
-                                    {activeGroups.map((g) => (
-                                      <option key={g.id} value={g.id}>{g.name}</option>
-                                    ))}
-                                  </select>
-                                )}
-                              </td>
-                            )}
-                            <td className="px-4 py-3 text-slate-500">{u.email}</td>
-                            <td className="px-4 py-3 font-semibold text-slate-700">
-                              {isSelf || u.role === 'admin' ? (
-                                <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  u.role === 'admin' ? 'bg-red-50 text-red-700 border border-red-100' :
-                                  u.role === 'rh' ? 'bg-purple-50 text-purple-700 border border-purple-100' :
-                                  u.role === 'socio' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
-                                  u.role === 'gestor' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
-                                  u.role === 'admin_delegado' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' :
-                                  'bg-slate-50 text-slate-700 border border-slate-100'
-                                }`}>
-                                  {getRoleLabel(u.role)}
-                                </span>
-                              ) : (
-                                <select
-                                  value={u.role}
-                                  onChange={(e) => handleUpdateUserRole(u.id, e.target.value)}
-                                  className="px-2 py-1 bg-slate-950 border border-slate-800 rounded text-slate-100 text-[10px] focus:outline-none focus:ring-1 focus:ring-amber-500 font-semibold cursor-pointer"
-                                >
-                                  <option value="socio">Sócio-Diretor</option>
-                                  <option value="rh">Recursos Humanos</option>
-                                  <option value="gestor">Gestor de Área</option>
-                                  <option value="consulta">Leitura/Consulta</option>
-                                  <option value="admin_delegado">Admin Delegado</option>
-                                </select>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              {isSelf || u.role === 'admin' ? (
-                                <span className="text-slate-400 font-semibold text-[10px]">-</span>
-                              ) : (
-                                <input
-                                  type="checkbox"
-                                  checked={u.has_financial_access || false}
-                                  onChange={() => handleToggleFinancialAccess(u.id)}
-                                  className="w-4 h-4 rounded border-slate-800 bg-slate-950 text-amber-600 focus:ring-amber-500 cursor-pointer"
-                                />
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <span className={`inline-block px-2.5 py-0.5 text-[10px] font-bold rounded-full ${
-                                u.is_active 
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' 
-                                  : 'bg-red-50 text-red-700 border border-red-100'
-                              }`}>
-                                {u.is_active ? 'Ativo' : 'Inativo'}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <div className="flex items-center justify-center gap-2">
-                                <button
-                                  onClick={() => handleResetUserPassword(u)}
-                                  className="p-1.5 rounded text-amber-600 hover:text-amber-700 hover:bg-amber-50 transition-all cursor-pointer"
-                                  title="Resetar Senha"
-                                >
-                                  <Key className="w-4 h-4" />
-                                </button>
-                                {!isSelf && u.role !== 'admin' ? (
-                                  <>
-                                    <button
-                                      onClick={() => handleToggleActive(u)}
-                                      className={`p-1.5 rounded transition-all cursor-pointer ${
-                                        u.is_active
-                                          ? 'text-red-500 hover:text-red-700 hover:bg-red-50'
-                                          : 'text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50'
-                                      }`}
-                                      title={u.is_active ? 'Desativar Conta' : 'Ativar Conta'}
-                                    >
-                                      <Power className="w-4 h-4" />
-                                    </button>
-                                    {isAdminMaster && (
-                                      <button
-                                        onClick={() => handleDeleteUser(u)}
-                                        className="p-1.5 rounded text-red-500 hover:text-red-700 hover:bg-red-50 transition-all cursor-pointer"
-                                        title="Excluir Conta"
+                /* TABLE VIEW FOR ADMIN DELEGADO OR IF GROUP SELECTED */
+                <div className="space-y-4">
+                  {isAdminMaster && selectedFolderGroup && (
+                    <div className="flex items-center gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                      <button
+                        onClick={() => setSelectedFolderGroup(null)}
+                        className="flex items-center gap-1 text-[11px] font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm cursor-pointer hover:bg-slate-50 transition-colors"
+                      >
+                        ← Voltar para Pastas
+                      </button>
+                      <span className="text-xs font-semibold text-slate-400">/</span>
+                      <span className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5">
+                        <FolderKanban className="w-4 h-4 text-amber-500" />
+                        {selectedFolderGroup.name}
+                      </span>
+                    </div>
+                  )}
+                  
+                  <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase">
+                          <th className="px-4 py-3">Usuário</th>
+                          {isAdminMaster && <th className="px-4 py-3">Grupo/Empresa</th>}
+                          <th className="px-4 py-3">E-mail</th>
+                          <th className="px-4 py-3">Perfil de Acesso</th>
+                          <th className="px-4 py-3 text-center">Permissões</th>
+                          <th className="px-4 py-3 text-center">Status</th>
+                          <th className="px-4 py-3 text-center">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {usersList
+                          .filter(u => {
+                            if (!isAdminMaster) return true;
+                            if (!selectedFolderGroup) return true;
+                            if (selectedFolderGroup.id === 'sem_grupo') return !u.group_id && u.role !== 'admin';
+                            return u.group_id === selectedFolderGroup.id;
+                          })
+                          .map((u) => {
+                            const isSelf = u.username === user.username
+                            const groupName = activeGroups.find(g => g.id === u.group_id)?.name || 'Sem Grupo'
+                            return (
+                              <tr key={u.id} className="hover:bg-slate-50">
+                                <td className="px-4 py-3 font-bold text-slate-800 flex items-center gap-2">
+                                  {u.username}
+                                  {isSelf && (
+                                    <span className="inline-block px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded text-[9px] font-bold">
+                                      Você
+                                    </span>
+                                  )}
+                                  {u.password_reset_requested && (
+                                    <span className="inline-block px-1.5 py-0.2 bg-red-100 border border-red-200 text-red-700 rounded text-[9px] font-bold animate-pulse">
+                                      Solicitou Reset
+                                    </span>
+                                  )}
+                                </td>
+                                {isAdminMaster && (
+                                  <td className="px-4 py-3 font-semibold text-slate-700">
+                                    {isSelf || u.role === 'admin' ? (
+                                      <span className="text-slate-500">{groupName}</span>
+                                    ) : (
+                                      <select
+                                        value={u.group_id || ''}
+                                        onChange={(e) => handleUpdateUserGroup(u.id, e.target.value)}
+                                        className="px-2 py-1 bg-slate-950 border border-slate-800 rounded text-slate-100 text-[10px] focus:outline-none focus:ring-1 focus:ring-amber-500 font-semibold cursor-pointer"
                                       >
-                                        <Trash2 className="w-4 h-4" />
-                                      </button>
+                                        {activeGroups.map((g) => (
+                                          <option key={g.id} value={g.id}>{g.name}</option>
+                                        ))}
+                                      </select>
                                     )}
-                                  </>
-                                ) : (
-                                  !isSelf && <span className="w-7 text-center text-slate-300 font-semibold text-[10px]">-</span>
+                                  </td>
                                 )}
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                                <td className="px-4 py-3 text-slate-500">{u.email}</td>
+                                <td className="px-4 py-3 font-semibold text-slate-700">
+                                  {isSelf || u.role === 'admin' ? (
+                                    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                                      u.role === 'admin' ? 'bg-red-50 text-red-700 border border-red-100' :
+                                      u.role === 'rh' ? 'bg-purple-50 text-purple-700 border border-purple-100' :
+                                      u.role === 'socio' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                                      u.role === 'gestor' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+                                      u.role === 'admin_delegado' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' :
+                                      'bg-slate-50 text-slate-700 border border-slate-100'
+                                    }`}>
+                                      {getRoleLabel(u.role)}
+                                    </span>
+                                  ) : (
+                                    <select
+                                      value={u.role}
+                                      onChange={(e) => handleUpdateUserRole(u.id, e.target.value)}
+                                      className="px-2 py-1 bg-slate-950 border border-slate-800 rounded text-slate-100 text-[10px] focus:outline-none focus:ring-1 focus:ring-amber-500 font-semibold cursor-pointer"
+                                    >
+                                      <option value="socio">Sócio-Diretor</option>
+                                      <option value="rh">Recursos Humanos</option>
+                                      <option value="gestor">Gestor de Área</option>
+                                      <option value="consulta">Leitura/Consulta</option>
+                                      <option value="admin_delegado">Admin Delegado</option>
+                                    </select>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  {isSelf || u.role === 'admin' ? (
+                                    <span className="text-slate-400 font-semibold text-[10px]">-</span>
+                                  ) : (
+                                    <div className="relative inline-block text-left">
+                                      <button
+                                        onClick={() => setOpenPopoverId(openPopoverId === u.id ? null : u.id)}
+                                        className="px-2.5 py-1.5 bg-slate-105 hover:bg-slate-200 text-slate-700 font-bold border border-slate-250 rounded-lg text-[10px] transition-all cursor-pointer inline-flex items-center gap-1"
+                                      >
+                                        Permissões
+                                        <ChevronDown className="w-3 h-3 text-slate-500" />
+                                      </button>
+                                      
+                                      {openPopoverId === u.id && (
+                                        <>
+                                          <div 
+                                            className="fixed inset-0 z-10" 
+                                            onClick={() => setOpenPopoverId(null)}
+                                          ></div>
+                                          <div className="absolute right-0 mt-1 w-64 rounded-xl bg-white border border-slate-200 shadow-xl z-20 p-4 space-y-3.5 text-left animate-fadeIn">
+                                            <h4 className="text-[10px] font-black text-slate-450 uppercase tracking-wider mb-2 border-b border-slate-100 pb-1.5">
+                                              Definir Acessos
+                                            </h4>
+                                            <div className="space-y-3">
+                                              <div className="space-y-1">
+                                                <span className="text-[11px] font-bold text-slate-500">Financeiro</span>
+                                                <select
+                                                  value={u.financial_access || 'none'}
+                                                  onChange={(e) => handleUpdateUserPermissions(u.id, {
+                                                    financial_access: e.target.value,
+                                                    suppliers_access: u.suppliers_access || 'none',
+                                                    hr_access: u.hr_access || 'none',
+                                                    reports_access: u.reports_access || 'none',
+                                                    has_financial_access: e.target.value !== 'none',
+                                                    has_suppliers_access: (u.suppliers_access || 'none') !== 'none',
+                                                    has_hr_access: (u.hr_access || 'none') !== 'none',
+                                                    has_reports_access: (u.reports_access || 'none') !== 'none'
+                                                  })}
+                                                  className="w-full text-[11px] bg-slate-50 border border-slate-200 rounded-lg p-1.5 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                                                >
+                                                  <option value="none">Nenhum (Bloqueado)</option>
+                                                  <option value="read">Leitura (Apenas Visualizar)</option>
+                                                  <option value="write">Edição (Completo)</option>
+                                                </select>
+                                              </div>
+
+                                              <div className="space-y-1">
+                                                <span className="text-[11px] font-bold text-slate-500">Fornecedores</span>
+                                                <select
+                                                  value={u.suppliers_access || 'none'}
+                                                  onChange={(e) => handleUpdateUserPermissions(u.id, {
+                                                    financial_access: u.financial_access || 'none',
+                                                    suppliers_access: e.target.value,
+                                                    hr_access: u.hr_access || 'none',
+                                                    reports_access: u.reports_access || 'none',
+                                                    has_financial_access: (u.financial_access || 'none') !== 'none',
+                                                    has_suppliers_access: e.target.value !== 'none',
+                                                    has_hr_access: (u.hr_access || 'none') !== 'none',
+                                                    has_reports_access: (u.reports_access || 'none') !== 'none'
+                                                  })}
+                                                  className="w-full text-[11px] bg-slate-50 border border-slate-200 rounded-lg p-1.5 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                                                >
+                                                  <option value="none">Nenhum (Bloqueado)</option>
+                                                  <option value="read">Leitura (Apenas Visualizar)</option>
+                                                  <option value="write">Edição (Completo)</option>
+                                                </select>
+                                              </div>
+
+                                              <div className="space-y-1">
+                                                <span className="text-[11px] font-bold text-slate-500">Recursos Humanos</span>
+                                                <select
+                                                  value={u.hr_access || 'none'}
+                                                  onChange={(e) => handleUpdateUserPermissions(u.id, {
+                                                    financial_access: u.financial_access || 'none',
+                                                    suppliers_access: u.suppliers_access || 'none',
+                                                    hr_access: e.target.value,
+                                                    reports_access: u.reports_access || 'none',
+                                                    has_financial_access: (u.financial_access || 'none') !== 'none',
+                                                    has_suppliers_access: (u.suppliers_access || 'none') !== 'none',
+                                                    has_hr_access: e.target.value !== 'none',
+                                                    has_reports_access: (u.reports_access || 'none') !== 'none'
+                                                  })}
+                                                  className="w-full text-[11px] bg-slate-50 border border-slate-200 rounded-lg p-1.5 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                                                >
+                                                  <option value="none">Nenhum (Bloqueado)</option>
+                                                  <option value="read">Leitura (Apenas Visualizar)</option>
+                                                  <option value="write">Edição (Completo)</option>
+                                                </select>
+                                              </div>
+
+                                              <div className="space-y-1">
+                                                <span className="text-[11px] font-bold text-slate-500">Relatórios</span>
+                                                <select
+                                                  value={u.reports_access || 'none'}
+                                                  onChange={(e) => handleUpdateUserPermissions(u.id, {
+                                                    financial_access: u.financial_access || 'none',
+                                                    suppliers_access: u.suppliers_access || 'none',
+                                                    hr_access: u.hr_access || 'none',
+                                                    reports_access: e.target.value,
+                                                    has_financial_access: (u.financial_access || 'none') !== 'none',
+                                                    has_suppliers_access: (u.suppliers_access || 'none') !== 'none',
+                                                    has_hr_access: (u.hr_access || 'none') !== 'none',
+                                                    has_reports_access: e.target.value !== 'none'
+                                                  })}
+                                                  className="w-full text-[11px] bg-slate-50 border border-slate-200 rounded-lg p-1.5 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                                                >
+                                                  <option value="none">Nenhum (Bloqueado)</option>
+                                                  <option value="read">Leitura (Apenas Visualizar)</option>
+                                                  <option value="write">Edição (Completo)</option>
+                                                </select>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </>
+                                      )}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <span className={`inline-block px-2.5 py-0.5 text-[10px] font-bold rounded-full ${
+                                    u.is_active 
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' 
+                                      : 'bg-red-50 text-red-700 border border-red-100'
+                                  }`}>
+                                    {u.is_active ? 'Ativo' : 'Inativo'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <div className="flex items-center justify-center gap-2">
+                                    <button
+                                      onClick={() => handleResetUserPassword(u)}
+                                      className="p-1.5 rounded text-amber-600 hover:text-amber-700 hover:bg-amber-50 transition-all cursor-pointer"
+                                      title="Resetar Senha"
+                                    >
+                                      <Key className="w-4 h-4" />
+                                    </button>
+                                    {!isSelf && u.role !== 'admin' ? (
+                                      <>
+                                        <button
+                                          onClick={() => handleToggleActive(u)}
+                                          className={`p-1.5 rounded transition-all cursor-pointer ${
+                                            u.is_active
+                                              ? 'text-red-500 hover:text-red-700 hover:bg-red-50'
+                                              : 'text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50'
+                                          }`}
+                                          title={u.is_active ? 'Desativar Conta' : 'Ativar Conta'}
+                                        >
+                                          <Power className="w-4 h-4" />
+                                        </button>
+                                        {isAdminMaster && (
+                                          <button
+                                            onClick={() => handleDeleteUser(u)}
+                                            className="p-1.5 rounded text-red-500 hover:text-red-700 hover:bg-red-50 transition-all cursor-pointer"
+                                            title="Excluir Conta"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        )}
+                                      </>
+                                    ) : (
+                                      !isSelf && <span className="w-7 text-center text-slate-300 font-semibold text-[10px]">-</span>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>

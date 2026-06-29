@@ -10,18 +10,27 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     // Restore session on load
-    const storedToken = localStorage.getItem('lira_token')
-    const storedUser = localStorage.getItem('lira_user')
-    
-    if (storedToken && storedUser) {
-      try {
-        setUser(JSON.parse(storedUser))
-      } catch (e) {
-        localStorage.removeItem('lira_token')
-        localStorage.removeItem('lira_user')
+    const restoreSession = async () => {
+      const storedToken = localStorage.getItem('lira_token')
+      const storedUser = localStorage.getItem('lira_user')
+      
+      if (storedToken) {
+        try {
+          const res = await api.get('/auth/me')
+          setUser(res.data)
+          localStorage.setItem('lira_user', JSON.stringify(res.data))
+        } catch (e) {
+          if (storedUser) {
+            setUser(JSON.parse(storedUser))
+          } else {
+            localStorage.removeItem('lira_token')
+            localStorage.removeItem('lira_user')
+          }
+        }
       }
+      setLoading(false)
     }
-    setLoading(false)
+    restoreSession()
   }, [])
 
   const login = async (username, password) => {
@@ -29,9 +38,32 @@ export const AuthProvider = ({ children }) => {
     setLoading(true)
     try {
       const response = await api.post('/auth/login', { username, password })
-      const { access_token, role, username: resUsername } = response.data
+      const { 
+        access_token, 
+        role, 
+        username: resUsername,
+        has_financial_access,
+        has_suppliers_access,
+        has_reports_access,
+        has_hr_access,
+        financial_access,
+        suppliers_access,
+        hr_access,
+        reports_access
+      } = response.data
       
-      const userData = { username: resUsername, role }
+      const userData = { 
+        username: resUsername, 
+        role,
+        has_financial_access,
+        has_suppliers_access,
+        has_reports_access,
+        has_hr_access,
+        financial_access,
+        suppliers_access,
+        hr_access,
+        reports_access
+      }
       
       localStorage.setItem('lira_token', access_token)
       localStorage.setItem('lira_user', JSON.stringify(userData))

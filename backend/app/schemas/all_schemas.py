@@ -32,9 +32,26 @@ class UserResponse(UserBase):
     is_active: bool
     password_reset_requested: bool = False
     has_financial_access: bool = False
+    has_suppliers_access: bool = False
+    has_reports_access: bool = False
+    has_hr_access: bool = False
+    financial_access: str = "none"
+    suppliers_access: str = "none"
+    hr_access: str = "none"
+    reports_access: str = "none"
 
     class Config:
         orm_mode = True
+
+class UserPermissionsUpdateRequest(BaseModel):
+    has_financial_access: bool
+    has_suppliers_access: bool
+    has_reports_access: bool
+    has_hr_access: bool
+    financial_access: str
+    suppliers_access: str
+    hr_access: str
+    reports_access: str
 
 class UserRoleUpdateRequest(BaseModel):
     role: str
@@ -47,6 +64,14 @@ class Token(BaseModel):
     token_type: str
     role: str
     username: str
+    has_financial_access: bool = False
+    has_suppliers_access: bool = False
+    has_reports_access: bool = False
+    has_hr_access: bool = False
+    financial_access: str = "none"
+    suppliers_access: str = "none"
+    hr_access: str = "none"
+    reports_access: str = "none"
 
 class TokenData(BaseModel):
     username: Optional[str] = None
@@ -90,6 +115,11 @@ class ContractBase(BaseModel):
     manager_name: Optional[str] = None
     base_salary: float
     benefits: Optional[str] = None  # JSON string
+    job_position_id: Optional[str] = None
+    sector_id: Optional[str] = None
+    work_scale_id: Optional[str] = None
+    contract_type: Optional[str] = "CLT"
+    status: Optional[str] = "Experiência"
 
 class ContractCreate(ContractBase):
     pass
@@ -115,6 +145,83 @@ class ShiftCreate(ShiftBase):
 class ShiftResponse(ShiftBase):
     id: str
     employee_id: str
+
+    class Config:
+        orm_mode = True
+
+# ----------------- HR Evolution Schemas -----------------
+
+class SectorBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    is_active: bool = True
+
+class SectorCreate(SectorBase):
+    pass
+
+class SectorResponse(SectorBase):
+    id: str
+    group_id: str
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class JobPositionBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    base_salary: float
+    level: Optional[str] = None
+    sector_id: Optional[str] = None
+    is_active: bool = True
+
+class JobPositionCreate(JobPositionBase):
+    pass
+
+class JobPositionResponse(JobPositionBase):
+    id: str
+    group_id: str
+    created_at: datetime
+    sector: Optional[SectorResponse] = None
+
+    class Config:
+        orm_mode = True
+
+
+class WorkScaleBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    entry_time: str = "09:00"
+    exit_time: str = "18:00"
+    interval_minutes: int = 60
+    is_active: bool = True
+
+class WorkScaleCreate(WorkScaleBase):
+    pass
+
+class WorkScaleResponse(WorkScaleBase):
+    id: str
+    group_id: str
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class EmployeeDocumentBase(BaseModel):
+    document_type: str
+    file_path: Optional[str] = None
+    status: str = "Pendente"
+    due_date: Optional[date] = None
+
+class EmployeeDocumentCreate(EmployeeDocumentBase):
+    employee_id: str
+
+class EmployeeDocumentResponse(EmployeeDocumentBase):
+    id: str
+    employee_id: str
+    created_at: datetime
 
     class Config:
         orm_mode = True
@@ -148,6 +255,12 @@ class EmployeeBase(BaseModel):
     ctps: Optional[str] = None
     pis: Optional[str] = None
     reservista: Optional[str] = None
+    sex: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_agency: Optional[str] = None
+    bank_account: Optional[str] = None
+    pix_key: Optional[str] = None
+    notes: Optional[str] = None
 
 class EmployeeCreate(EmployeeBase):
     contract: ContractCreate
@@ -179,6 +292,12 @@ class EmployeeUpdate(BaseModel):
     ctps: Optional[str] = None
     pis: Optional[str] = None
     reservista: Optional[str] = None
+    sex: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_agency: Optional[str] = None
+    bank_account: Optional[str] = None
+    pix_key: Optional[str] = None
+    notes: Optional[str] = None
     
     # Optional nested contract update
     role: Optional[str] = None
@@ -186,6 +305,11 @@ class EmployeeUpdate(BaseModel):
     manager_name: Optional[str] = None
     base_salary: Optional[float] = None
     benefits: Optional[str] = None
+    job_position_id: Optional[str] = None
+    sector_id: Optional[str] = None
+    work_scale_id: Optional[str] = None
+    contract_type: Optional[str] = None
+    contract_status: Optional[str] = None
     reason_for_change: Optional[str] = None
 
 class EmployeeResponse(EmployeeBase):
@@ -193,6 +317,7 @@ class EmployeeResponse(EmployeeBase):
     contract: Optional[ContractResponse] = None
     shift: Optional[ShiftResponse] = None
     dependents: List[DependentResponse] = []
+    documents: List[EmployeeDocumentResponse] = []
 
     class Config:
         orm_mode = True
@@ -420,5 +545,7 @@ class FinancialSummaryResponse(BaseModel):
     category_expenses: Optional[Dict[str, float]] = None
     payment_methods_revenues: Optional[Dict[str, float]] = None
     payment_methods_expenses: Optional[Dict[str, float]] = None
+    salaries_breakdown: Optional[Dict[str, float]] = None
     monthly_breakdown: List[FinancialSummaryMonth]
+
 

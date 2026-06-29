@@ -30,7 +30,13 @@ from app.services.audit_service import log_action
 router = APIRouter(prefix="/financial", tags=["financial"])
 
 def check_financial_viewer(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role in ["admin", "admin_delegado", "socio"] or current_user.has_financial_access:
+    if current_user.role in ["admin", "admin_delegado"]:
+        return current_user
+    if current_user.financial_access in ["read", "write"]:
+        return current_user
+    if current_user.role in ["socio", "gestor", "financeiro"] and current_user.financial_access != "none":
+        return current_user
+    if current_user.has_financial_access:
         return current_user
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
@@ -38,7 +44,13 @@ def check_financial_viewer(current_user: User = Depends(get_current_user)) -> Us
     )
 
 def check_financial_manager(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role in ["admin", "admin_delegado", "socio"] or current_user.has_financial_access:
+    if current_user.role in ["admin", "admin_delegado"]:
+        return current_user
+    if current_user.financial_access == "write":
+        return current_user
+    if current_user.role in ["socio", "gestor", "financeiro"] and current_user.financial_access == "write":
+        return current_user
+    if current_user.has_financial_access and current_user.financial_access != "none" and current_user.financial_access != "read":
         return current_user
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
@@ -107,13 +119,109 @@ def calculate_salaries_for_period(db: Session, year: int, month: int, current_us
                     benefits_data = json.loads(contract.benefits)
                     if isinstance(benefits_data, dict):
                         for b_key, b_val in benefits_data.items():
-                            if isinstance(b_val, dict) and b_val.get("active"):
-                                cost = b_val.get("cost") or 0.0
-                                total_salary += float(cost)
+                            if isinstance(b_val, dict):
+                                if b_val.get("active"):
+                                    cost = b_val.get("cost") or 0.0
+                                    total_salary += float(cost)
+                            elif isinstance(b_val, (int, float)):
+                                total_salary += float(b_val)
+                            elif isinstance(b_val, str):
+                                try:
+                                    total_salary += float(b_val)
+                                except ValueError:
+                                    pass
                 except Exception:
                     pass
 
     return total_salary
+
+def get_salaries_breakdown_for_period(db: Session, year: int, month: int, current_user: User, group_id: Optional[str] = None) -> dict:
+    """
+    Get detailed breakdown of salary base and benefits costs for a year and month.
+    """
+    target_date = date(year, month, 28)
+    
+    breakdown = {
+        "Salário Base": 0.0,
+        "Vale Transporte (VT)": 0.0,
+        "Vale Refeição (VR)": 0.0,
+        "Vale Alimentação (VA)": 0.0,
+        "Plano de Saúde": 0.0,
+        "Plano Odontológico": 0.0,
+        "Seguro de Vida": 0.0,
+        "Outros Benefícios": 0.0
+    }
+    
+    query = db.query(Contract).join(Employee)
+    if current_user.role != "admin":
+        query = query.filter(Employee.group_id == current_user.group_id)
+    elif group_id:
+        query = query.filter(Employee.group_id == group_id)
+        
+    contracts = query.all()
+    for contract in contracts:
+        emp = contract.employee
+        if contract.admission_date > target_date:
+            continue
+
+        is_active_then = True
+        if emp.status == "terminated":
+            term_action = (
+                db.query(DisciplinaryAction)
+                .filter(
+                    DisciplinaryAction.employee_id == emp.id,
+                    DisciplinaryAction.type == "termination",
+                )
+                .first()
+            )
+            if term_action:
+                term_date = term_action.action_date
+                if term_date.year < year or (term_date.year == year and term_date.month < month):
+                    is_active_then = False
+            else:
+                is_active_then = False
+
+        if is_active_then:
+            breakdown["Salário Base"] += float(contract.base_salary or 0.0)
+            if contract.benefits:
+                try:
+                    benefits_data = json.loads(contract.benefits)
+                    if isinstance(benefits_data, dict):
+                        for b_key, b_val in benefits_data.items():
+                            cost = 0.0
+                            if isinstance(b_val, dict):
+                                if b_val.get("active"):
+                                    cost = float(b_val.get("cost") or 0.0)
+                            elif isinstance(b_val, (int, float)):
+                                cost = float(b_val)
+                            elif isinstance(b_val, str):
+                                try:
+                                    cost = float(b_val)
+                                except ValueError:
+                                    pass
+                            
+                            if cost == 0.0:
+                                continue
+                                
+                            k_lower = b_key.lower()
+                            if "vt" in k_lower or "transporte" in k_lower:
+                                breakdown["Vale Transporte (VT)"] += cost
+                            elif "vr" in k_lower or "refeição" in k_lower or "refeicao" in k_lower or "ticket" in k_lower:
+                                breakdown["Vale Refeição (VR)"] += cost
+                            elif "va" in k_lower or "alimentação" in k_lower or "alimentacao" in k_lower:
+                                breakdown["Vale Alimentação (VA)"] += cost
+                            elif "saúde" in k_lower or "saude" in k_lower or "plano" in k_lower or "health" in k_lower:
+                                breakdown["Plano de Saúde"] += cost
+                            elif "odonto" in k_lower or "dental" in k_lower:
+                                breakdown["Plano Odontológico"] += cost
+                            elif "vida" in k_lower or "life" in k_lower:
+                                breakdown["Seguro de Vida"] += cost
+                            else:
+                                breakdown["Outros Benefícios"] += cost
+                except Exception:
+                    pass
+                    
+    return {k: round(v, 2) for k, v in breakdown.items()}
 
 def generate_next_recurring_expense(db: Session, expense: FinancialExpense, current_user: User):
     """
@@ -187,6 +295,7 @@ def get_financial_summary(
     total_rev = 0.0
     total_exp = 0.0
     total_sal = 0.0
+    salaries_breakdown = {}
 
     for m in months_to_process:
         # Sum Revenues where status == 'Recebido'
@@ -211,6 +320,11 @@ def get_financial_summary(
 
         # Sum Salaries (Auto)
         month_sal = calculate_salaries_for_period(db, year, m, current_user, group_id_to_filter)
+        
+        # Accumulate detailed breakdown
+        m_breakdown = get_salaries_breakdown_for_period(db, year, m, current_user, group_id_to_filter)
+        for cat, val in m_breakdown.items():
+            salaries_breakdown[cat] = salaries_breakdown.get(cat, 0.0) + val
 
         combined_exp = month_exp + month_sal
         net = month_rev - combined_exp
@@ -370,6 +484,7 @@ def get_financial_summary(
         "category_expenses": category_expenses,
         "payment_methods_revenues": payment_methods_revenues,
         "payment_methods_expenses": payment_methods_expenses,
+        "salaries_breakdown": {k: round(v, 2) for k, v in salaries_breakdown.items() if v > 0},
         "monthly_breakdown": monthly_breakdown
     }
 

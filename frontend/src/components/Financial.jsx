@@ -238,6 +238,14 @@ const Financial = () => {
     fetchFinancialData()
   }, [year, month])
 
+  useEffect(() => {
+    if (forceSubTab) {
+      setSubTab(forceSubTab)
+    } else {
+      setSubTab('dashboard')
+    }
+  }, [forceSubTab])
+
   // Helpers
   const formatCurrency = (val) => {
     return (val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -511,11 +519,36 @@ const Financial = () => {
     const queryStr = params.length > 0 ? `?${params.join('&')}` : ''
     
     try {
-      window.open(`/api/reports/financial/${format}${queryStr}`, '_blank')
+      setSuccess('Processando relatório...')
+      const response = await api.get(`/reports/financial/${format}${queryStr}`, {
+        responseType: 'blob'
+      })
+      
+      const blobType = format === 'pdf' 
+        ? 'application/pdf' 
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        
+      const blob = new Blob([response.data], { type: blobType })
+      const url = window.URL.createObjectURL(blob)
+      
+      if (format === 'pdf') {
+        window.open(url, '_blank')
+      } else {
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `relatorio_financeiro_${new Date().toISOString().slice(0,10)}.xlsx`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+      }
+      
+      window.URL.revokeObjectURL(url)
       setSuccess('Relatório exportado com sucesso!')
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
+      console.error(err)
       setError('Erro ao baixar relatório.')
+      setTimeout(() => setError(null), 3000)
     }
   }
 
@@ -642,48 +675,42 @@ const Financial = () => {
       )}
 
       {/* Internal Navigation Sub-tabs */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap gap-2">
-        <button 
-          onClick={() => setSubTab('dashboard')}
-          className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all cursor-pointer ${
-            subTab === 'dashboard' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-          }`}
-        >
-          Dashboard
-        </button>
-        <button 
-          onClick={() => setSubTab('revenues')}
-          className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all cursor-pointer ${
-            subTab === 'revenues' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-          }`}
-        >
-          Recebimentos
-        </button>
-        <button 
-          onClick={() => setSubTab('payments')}
-          className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all cursor-pointer ${
-            subTab === 'payments' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-          }`}
-        >
-          Pagamentos
-        </button>
-        <button 
-          onClick={() => setSubTab('suppliers')}
-          className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all cursor-pointer ${
-            subTab === 'suppliers' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-          }`}
-        >
-          Fornecedores
-        </button>
-        <button 
-          onClick={() => setSubTab('reports')}
-          className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all cursor-pointer ${
-            subTab === 'reports' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-          }`}
-        >
-          Relatórios
-        </button>
-      </div>
+      {subTab !== 'suppliers' && (
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap gap-2">
+          <button 
+            onClick={() => setSubTab('dashboard')}
+            className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all cursor-pointer ${
+              subTab === 'dashboard' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+            }`}
+          >
+            Dashboard
+          </button>
+          <button 
+            onClick={() => setSubTab('revenues')}
+            className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all cursor-pointer ${
+              subTab === 'revenues' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+            }`}
+          >
+            Recebimentos
+          </button>
+          <button 
+            onClick={() => setSubTab('payments')}
+            className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all cursor-pointer ${
+              subTab === 'payments' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+            }`}
+          >
+            Pagamentos
+          </button>
+          <button 
+            onClick={() => setSubTab('reports')}
+            className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all cursor-pointer ${
+              subTab === 'reports' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+            }`}
+          >
+            Relatórios
+          </button>
+        </div>
+      )}
 
       {/* Date controls for filtering (hidden only for suppliers) */}
       {subTab !== 'suppliers' && (
@@ -731,37 +758,23 @@ const Financial = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between relative overflow-hidden group hover:shadow-md transition-all">
               <div className="space-y-2">
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Saldo Atual em Caixa</span>
-                <h3 className="text-2xl font-black text-slate-800">{formatCurrency(summary?.cash_balance)}</h3>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                  {month === null ? "Saldo Inicial (Ano Anterior)" : "Saldo Inicial (Mês Anterior)"}
+                </span>
+                <h3 className={`text-2xl font-black ${summary?.previous_month_balance >= 0 ? 'text-slate-800' : 'text-rose-600'}`}>
+                  {formatCurrency(summary?.previous_month_balance)}
+                </h3>
               </div>
               <div className="bg-slate-100 p-3.5 rounded-xl text-slate-800">
-                <DollarSign className="w-6 h-6" />
+                <Calendar className="w-6 h-6" />
               </div>
             </div>
 
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between relative overflow-hidden group hover:shadow-md transition-all">
               <div className="space-y-2">
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Recebimentos Pendentes</span>
-                <h3 className="text-2xl font-black text-amber-600">{formatCurrency(summary?.pending_receivables)}</h3>
-              </div>
-              <div className="bg-amber-50 p-3.5 rounded-xl text-amber-600">
-                <TrendingUp className="w-6 h-6" />
-              </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between relative overflow-hidden group hover:shadow-md transition-all">
-              <div className="space-y-2">
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Pagamentos Pendentes</span>
-                <h3 className="text-2xl font-black text-rose-600">{formatCurrency(summary?.pending_payables)}</h3>
-              </div>
-              <div className="bg-rose-50 p-3.5 rounded-xl text-rose-600">
-                <TrendingDown className="w-6 h-6" />
-              </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between relative overflow-hidden group hover:shadow-md transition-all">
-              <div className="space-y-2">
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Receitas do Mês</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                  {month === null ? "Receitas do Ano" : "Receitas do Mês"}
+                </span>
                 <h3 className="text-2xl font-black text-emerald-600">{formatCurrency(summary?.total_revenues)}</h3>
               </div>
               <div className="bg-emerald-50 p-3.5 rounded-xl text-emerald-600">
@@ -771,7 +784,9 @@ const Financial = () => {
 
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between relative overflow-hidden group hover:shadow-md transition-all">
               <div className="space-y-2">
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Despesas do Mês</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                  {month === null ? "Despesas do Ano" : "Despesas do Mês"}
+                </span>
                 <h3 className="text-2xl font-black text-slate-800">
                   {formatCurrency((summary?.total_expenses || 0) + (summary?.total_salaries || 0))}
                 </h3>
@@ -783,13 +798,41 @@ const Financial = () => {
 
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between relative overflow-hidden group hover:shadow-md transition-all">
               <div className="space-y-2">
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Resultado do Mês</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                  {month === null ? "Resultado do Ano" : "Resultado do Mês"}
+                </span>
                 <h3 className={`text-2xl font-black ${summary?.net_result >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                   {formatCurrency(summary?.net_result)}
                 </h3>
               </div>
               <div className={`p-3.5 rounded-xl ${summary?.net_result >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
                 {summary?.net_result >= 0 ? <TrendingUp className="w-6 h-6" /> : <TrendingDown className="w-6 h-6" />}
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between relative overflow-hidden group hover:shadow-md transition-all">
+              <div className="space-y-2">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                  {month === null ? "Caixa Acumulado no Ano" : "Caixa Acumulado no Mês"}
+                </span>
+                <h3 className={`text-2xl font-black ${(summary?.previous_month_balance || 0) + (summary?.net_result || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {formatCurrency((summary?.previous_month_balance || 0) + (summary?.net_result || 0))}
+                </h3>
+              </div>
+              <div className={`p-3.5 rounded-xl ${(summary?.previous_month_balance || 0) + (summary?.net_result || 0) >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                <Layers className="w-6 h-6" />
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between relative overflow-hidden group hover:shadow-md transition-all">
+              <div className="space-y-2">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Saldo Geral em Caixa</span>
+                <h3 className={`text-2xl font-black ${summary?.cash_balance >= 0 ? 'text-slate-800' : 'text-rose-600'}`}>
+                  {formatCurrency(summary?.cash_balance)}
+                </h3>
+              </div>
+              <div className="bg-slate-100 p-3.5 rounded-xl text-slate-800">
+                <DollarSign className="w-6 h-6" />
               </div>
             </div>
           </div>
@@ -898,6 +941,27 @@ const Financial = () => {
               {summary?.payment_methods_revenues && renderDonutChart(summary.payment_methods_revenues, false)}
             </div>
           </div>
+
+          {/* Detailed Salary and Benefits Costs Breakdown */}
+          {summary?.salaries_breakdown && Object.values(summary.salaries_breakdown).some(v => v > 0) && (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+              <div>
+                <h4 className="text-md font-bold text-slate-800 tracking-tight">Detalhamento de Custos de Salários e Benefícios</h4>
+                <p className="text-xs text-slate-400 mt-0.5">Visão analítica de salários base e benefícios dos colaboradores ativos no período</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {Object.entries(summary.salaries_breakdown).map(([label, val]) => {
+                  if (val === 0) return null
+                  return (
+                    <div key={label} className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 flex flex-col justify-between space-y-1">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{label}</span>
+                      <h5 className="text-sm font-black text-slate-700">{formatCurrency(val)}</h5>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -20,7 +20,9 @@ import {
   Users2,
   FileBadge,
   Trash2,
-  Edit2
+  Edit2,
+  Eye,
+  Download
 } from 'lucide-react'
 
 const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
@@ -35,6 +37,7 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
   const [disciplinary, setDisciplinary] = useState([])
   const [overtime, setOvertime] = useState([])
   const [leaves, setLeaves] = useState([])
+  const [documents, setDocuments] = useState([])
 
   // Modal States
   const [activeModal, setActiveModal] = useState(null) // 'disciplinary', 'overtime', 'leave', 'terminate', 'dependent'
@@ -57,17 +60,19 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
       setEmp(res.data)
       
       // Load historical data
-      const [histRes, discRes, otRes, leaveRes] = await Promise.all([
+      const [histRes, discRes, otRes, leaveRes, docRes] = await Promise.all([
         api.get(`/employees/${employeeId}/history`),
         api.get(`/disciplinary/employee/${employeeId}`),
         api.get(`/overtime/employee/${employeeId}`),
-        api.get(`/leaves/employee/${employeeId}`)
-      ]).catch(() => [[], [], [], []]) // Fallback if any fails
+        api.get(`/leaves/employee/${employeeId}`),
+        api.get(`/employees/${employeeId}/documents`)
+      ]).catch(() => [[], [], [], [], []]) // Fallback if any fails
 
       setCareerHistory(histRes?.data || [])
       setDisciplinary(discRes?.data || [])
       setOvertime(otRes?.data || [])
       setLeaves(leaveRes?.data || [])
+      setDocuments(docRes?.data || [])
       
       setLoading(false)
     } catch (err) {
@@ -100,7 +105,7 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
   }
 
   // Permissions checks
-  const isRHOrAdmin = user?.role === 'rh' || user?.role === 'admin'
+  const isRHOrAdmin = user?.role === 'admin' || user?.role === 'admin_delegado' || user?.hr_access === 'write' || (user?.role === 'rh' && (!user?.hr_access || user?.hr_access === 'write'))
   const isSocio = user?.role === 'socio'
   
   // Format currency
@@ -109,8 +114,19 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
   }
 
   // Print Ficha registration PDF
-  const handlePrintPDF = () => {
-    window.open(`/api/reports/employee/${employeeId}/pdf`, '_blank')
+  const handlePrintPDF = async () => {
+    try {
+      const response = await api.get(`/reports/employee/${employeeId}/pdf`, {
+        responseType: 'blob'
+      })
+      const blob = new Blob([response.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      window.open(url, '_blank')
+      setTimeout(() => window.URL.revokeObjectURL(url), 60000)
+    } catch (err) {
+      console.error(err)
+      alert('Erro ao gerar PDF do colaborador.')
+    }
   }
 
   // Handle Profile Photo Upload
@@ -129,6 +145,41 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
       alert('Foto de perfil carregada com sucesso!')
     } catch (err) {
       alert('Falha ao fazer upload da imagem.')
+    }
+  }
+
+  const handleUploadDocument = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    const docType = prompt("Digite o tipo de documento (ex: RG, CPF, Carteira Trabalho, Contrato, Comprovante Residência):")
+    if (!docType) return
+
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('document_type', docType)
+
+    try {
+      await api.post(`/employees/${employeeId}/documents`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+      alert("Documento anexado com sucesso!")
+      const docRes = await api.get(`/employees/${employeeId}/documents`)
+      setDocuments(docRes.data)
+    } catch (err) {
+      alert(err.response?.data?.detail || "Erro ao fazer upload do documento.")
+    }
+  }
+
+  const handleDeleteDocument = async (docId) => {
+    if (!confirm("Tem certeza que deseja excluir este documento?")) return
+    try {
+      await api.delete(`/employees/documents/${docId}`)
+      alert("Documento excluído com sucesso!")
+      setDocuments(prev => prev.filter(d => d.id !== docId))
+    } catch (err) {
+      alert(err.response?.data?.detail || "Erro ao excluir documento.")
     }
   }
 
@@ -404,6 +455,7 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
                 <div className="md:col-span-2"><span className="font-bold text-slate-500 text-xs block">Nome da Mãe:</span> <span className="text-slate-800">{emp.mother_name}</span></div>
                 <div><span className="font-bold text-slate-500 text-xs block">Nome do Pai:</span> <span className="text-slate-800">{emp.father_name || 'Não Declarado'}</span></div>
                 <div><span className="font-bold text-slate-500 text-xs block">Acessibilidade PCD:</span> <span className="text-slate-800">{emp.has_disability ? `Sim (${emp.disability_details})` : 'Não'}</span></div>
+                <div><span className="font-bold text-slate-500 text-xs block">Sexo:</span> <span className="text-slate-800">{emp.sex || 'Não Especificado'}</span></div>
               </div>
             </div>
 
@@ -416,6 +468,22 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
                 <div><span className="font-bold text-slate-500 text-xs block">Complemento:</span> <span className="text-slate-800">{emp.address_complement || 'N/A'}</span></div>
                 <div><span className="font-bold text-slate-500 text-xs block">Bairro:</span> <span className="text-slate-800">{emp.address_neighborhood}</span></div>
                 <div className="md:col-span-2"><span className="font-bold text-slate-500 text-xs block">Cidade/UF:</span> <span className="text-slate-800">{emp.address_city} - {emp.address_state}</span></div>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-xs font-bold text-amber-600 uppercase tracking-widest border-b border-slate-100 pb-1.5 mb-3">Dados Bancários & Observações</h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-x-6 gap-y-4 text-sm">
+                <div><span className="font-bold text-slate-500 text-xs block">Banco:</span> <span className="text-slate-800 font-medium">{emp.bank_name || 'Não Cadastrado'}</span></div>
+                <div><span className="font-bold text-slate-500 text-xs block">Agência:</span> <span className="text-slate-800">{emp.bank_agency || 'Não Cadastrado'}</span></div>
+                <div><span className="font-bold text-slate-500 text-xs block">Conta:</span> <span className="text-slate-800">{emp.bank_account || 'Não Cadastrado'}</span></div>
+                <div><span className="font-bold text-slate-500 text-xs block">Chave PIX:</span> <span className="text-slate-800 font-medium">{emp.pix_key || 'Não Cadastrado'}</span></div>
+                {emp.notes && (
+                  <div className="md:col-span-4 bg-slate-50 p-3.5 rounded-xl border border-slate-250/60 mt-2">
+                    <span className="font-bold text-slate-500 text-xs block mb-1">Anotações / Observações:</span>
+                    <p className="text-slate-700 text-xs leading-relaxed whitespace-pre-line font-medium">{emp.notes}</p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -606,6 +674,79 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
                   <span className="text-slate-800">{emp.reservista || 'Não cadastrado'}</span>
                 </div>
               </div>
+            </div>
+
+            {/* Dynamic Document Attachments */}
+            <div className="mt-6 border-t border-slate-100 pt-6">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="text-xs font-bold text-amber-600 uppercase tracking-widest">Documentos Anexados (Arquivos)</h4>
+                {isRHOrAdmin && (
+                  <label className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[10px] font-bold uppercase transition-colors cursor-pointer">
+                    <Upload className="w-3.5 h-3.5" />
+                    Anexar Arquivo
+                    <input
+                      type="file"
+                      className="hidden"
+                      onChange={handleUploadDocument}
+                      accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                    />
+                  </label>
+                )}
+              </div>
+
+              {documents.length === 0 ? (
+                <div className="p-6 border border-dashed border-slate-200 bg-slate-50/50 rounded-xl text-center">
+                  <FileText className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Nenhum arquivo anexado</span>
+                  <p className="text-[11px] text-slate-400 mt-1">Faça upload dos comprovantes de RG, CPF, etc.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {documents.map((doc) => (
+                    <div key={doc.id} className="p-3 border border-slate-200 rounded-xl bg-slate-50/20 hover:bg-white transition-all flex items-center justify-between gap-3 shadow-sm">
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <div className="p-2 bg-amber-50 text-amber-600 rounded-lg">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div className="overflow-hidden">
+                          <span className="text-xs font-bold text-slate-700 block truncate">{doc.document_type}</span>
+                          <span className="text-[10px] text-slate-400 block truncate">
+                            {doc.file_path.split('/').pop()}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <a
+                          href={`/uploads/documents/${doc.file_path.split('/').pop()}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all"
+                          title="Visualizar"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </a>
+                        <a
+                          href={`/uploads/documents/${doc.file_path.split('/').pop()}`}
+                          download
+                          className="p-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all"
+                          title="Baixar"
+                        >
+                          <Download className="w-4 h-4" />
+                        </a>
+                        {isRHOrAdmin && (
+                          <button
+                            onClick={() => handleDeleteDocument(doc.id)}
+                            className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-55 rounded-lg transition-all cursor-pointer animate-fadeIn"
+                            title="Excluir"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

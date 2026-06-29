@@ -11,6 +11,11 @@ import Reports from './components/Reports'
 import Financial from './components/Financial'
 import AuditLogs from './components/AuditLogs'
 import UserSettings from './components/UserSettings'
+import HRDashboard from './components/HRDashboard'
+import HRSectors from './components/HRSectors'
+import HRJobPositions from './components/HRJobPositions'
+import HRWorkScales from './components/HRWorkScales'
+import HRDocuments from './components/HRDocuments'
 import api from './utils/api'
 import { getSyncQueue, syncPendingRequests } from './utils/offlineSync'
 
@@ -115,10 +120,22 @@ const AppContent = () => {
             }}
           />
         )
+      case 'hr_dashboard':
+        return <HRDashboard />
+      case 'hr_sectors':
+        return <HRSectors />
+      case 'hr_job_positions':
+        return <HRJobPositions />
+      case 'hr_work_scales':
+        return <HRWorkScales />
+      case 'hr_documents':
+        return <HRDocuments />
       case 'reports':
         return <Reports />
       case 'financial':
         return <Financial />
+      case 'suppliers':
+        return <Financial forceSubTab="suppliers" />
       case 'audit':
         return <AuditLogs />
       case 'settings':

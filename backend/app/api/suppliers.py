@@ -12,7 +12,13 @@ from app.services.audit_service import log_action
 router = APIRouter(prefix="/suppliers", tags=["suppliers"])
 
 def check_supplier_viewer(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role in ["admin", "admin_delegado", "socio"] or current_user.has_financial_access:
+    if current_user.role in ["admin", "admin_delegado"]:
+        return current_user
+    if current_user.suppliers_access in ["read", "write"] or current_user.financial_access in ["read", "write"]:
+        return current_user
+    if current_user.role in ["socio", "gestor", "financeiro"] and current_user.suppliers_access != "none":
+        return current_user
+    if current_user.has_suppliers_access or current_user.has_financial_access:
         return current_user
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
@@ -20,7 +26,13 @@ def check_supplier_viewer(current_user: User = Depends(get_current_user)) -> Use
     )
 
 def check_supplier_manager(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role in ["admin", "admin_delegado", "socio"] or current_user.has_financial_access:
+    if current_user.role in ["admin", "admin_delegado"]:
+        return current_user
+    if current_user.suppliers_access == "write" or current_user.financial_access == "write":
+        return current_user
+    if current_user.role in ["socio", "gestor", "financeiro"] and current_user.suppliers_access == "write":
+        return current_user
+    if (current_user.has_suppliers_access or current_user.has_financial_access) and current_user.suppliers_access != "none" and current_user.suppliers_access != "read":
         return current_user
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,

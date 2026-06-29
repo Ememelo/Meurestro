@@ -12,7 +12,7 @@ from app.models.all_models import User
 from app.schemas.all_schemas import (
     Token, LoginRequest, UserResponse, UserCreate, PasswordChangeRequest,
     AdminPasswordResetRequest, ForgotPasswordRequest, UserRoleUpdateRequest,
-    UserGroupUpdateRequest
+    UserGroupUpdateRequest, UserPermissionsUpdateRequest
 )
 from app.services.audit_service import log_action
 
@@ -53,11 +53,22 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     return user
 
 class RoleChecker:
-    def __init__(self, allowed_roles: list[str]):
+    def __init__(self, allowed_roles: list[str], required_permission: str = None):
         self.allowed_roles = allowed_roles
+        self.required_permission = required_permission
 
     def __call__(self, current_user: User = Depends(get_current_user)) -> User:
-        if current_user.role not in self.allowed_roles:
+        has_role = current_user.role in self.allowed_roles
+        has_perm = False
+        if self.required_permission:
+            if self.required_permission == "has_hr_access":
+                has_perm = getattr(current_user, "hr_access", "none") == "write" or getattr(current_user, "has_hr_access", False) is True
+            elif self.required_permission == "has_reports_access":
+                has_perm = getattr(current_user, "reports_access", "none") in ["read", "write"] or getattr(current_user, "has_reports_access", False) is True
+            elif hasattr(current_user, self.required_permission):
+                has_perm = getattr(current_user, self.required_permission) is True
+
+        if not (has_role or has_perm):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Você não tem permissão para realizar esta ação."
@@ -84,7 +95,15 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
         "access_token": access_token,
         "token_type": "bearer",
         "role": user.role,
-        "username": user.username
+        "username": user.username,
+        "has_financial_access": user.has_financial_access,
+        "has_suppliers_access": user.has_suppliers_access,
+        "has_reports_access": user.has_reports_access,
+        "has_hr_access": user.has_hr_access,
+        "financial_access": user.financial_access,
+        "suppliers_access": user.suppliers_access,
+        "hr_access": user.hr_access,
+        "reports_access": user.reports_access
     }
 
 # Criar Novo Usuário (Admin Master ou Admin Delegado)
@@ -124,13 +143,38 @@ def register(
             detail="Usuário com este nome de usuário ou e-mail já existe."
         )
     
+    financial_access = "none"
+    suppliers_access = "none"
+    hr_access = "none"
+    reports_access = "none"
+    
+    if user_in.role in ["admin", "admin_delegado", "gestor", "socio"]:
+        financial_access = "write"
+        suppliers_access = "write"
+        hr_access = "write"
+        reports_access = "write"
+    elif user_in.role == "rh":
+        hr_access = "write"
+        reports_access = "write"
+    elif user_in.role == "financeiro":
+        financial_access = "write"
+        suppliers_access = "write"
+
     db_user = User(
         username=user_in.username,
         email=user_in.email,
         password_hash=get_password_hash(user_in.password),
         role=user_in.role,
         group_id=group_id_to_set,
-        is_active=True
+        is_active=True,
+        financial_access=financial_access,
+        suppliers_access=suppliers_access,
+        hr_access=hr_access,
+        reports_access=reports_access,
+        has_financial_access=(financial_access != "none"),
+        has_suppliers_access=(suppliers_access != "none"),
+        has_hr_access=(hr_access != "none"),
+        has_reports_access=(reports_access != "none")
     )
     db.add(db_user)
     db.commit()
@@ -189,13 +233,38 @@ def signup(
             detail="Usuário com este nome de usuário ou e-mail já existe."
         )
     
+    financial_access = "none"
+    suppliers_access = "none"
+    hr_access = "none"
+    reports_access = "none"
+    
+    if user_in.role in ["admin", "admin_delegado", "gestor", "socio"]:
+        financial_access = "write"
+        suppliers_access = "write"
+        hr_access = "write"
+        reports_access = "write"
+    elif user_in.role == "rh":
+        hr_access = "write"
+        reports_access = "write"
+    elif user_in.role == "financeiro":
+        financial_access = "write"
+        suppliers_access = "write"
+
     db_user = User(
         username=user_in.username,
         email=user_in.email,
         password_hash=get_password_hash(user_in.password),
         role=user_in.role,
         group_id=group_id_to_set,
-        is_active=True
+        is_active=True,
+        financial_access=financial_access,
+        suppliers_access=suppliers_access,
+        hr_access=hr_access,
+        reports_access=reports_access,
+        has_financial_access=(financial_access != "none"),
+        has_suppliers_access=(suppliers_access != "none"),
+        has_hr_access=(hr_access != "none"),
+        has_reports_access=(reports_access != "none")
     )
     db.add(db_user)
     db.commit()
@@ -370,7 +439,51 @@ def toggle_user_financial_access(
     user.has_financial_access = not user.has_financial_access
     db.commit()
     log_action(db, current_user.id, "TOGGLE_USER_FINANCIAL_ACCESS", "users", user_id, {"username": user.username, "financial_access": user.has_financial_access})
-    return {"message": "Status de acesso financeiro atualizado com sucesso.", "has_financial_access": user.has_financial_access}
+    return {"message": "Status de acesso financeiro updated successfully.", "has_financial_access": user.has_financial_access}
+
+
+@router.put("/users/{user_id}/permissions", response_model=UserResponse)
+def update_user_permissions(
+    user_id: str,
+    req: UserPermissionsUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(RoleChecker(["admin", "admin_delegado"]))
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+
+    # Tenant check
+    if current_user.role == "admin_delegado":
+        if user.group_id != current_user.group_id:
+            raise HTTPException(status_code=403, detail="Você não tem permissão para alterar permissões de um usuário de outro grupo.")
+        if user.role == "admin":
+            raise HTTPException(status_code=403, detail="Você não tem permissão para alterar as permissões do Administrador Master.")
+
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Você não pode alterar suas próprias permissões.")
+
+    user.financial_access = req.financial_access
+    user.suppliers_access = req.suppliers_access
+    user.hr_access = req.hr_access
+    user.reports_access = req.reports_access
+    
+    user.has_financial_access = (req.financial_access != "none")
+    user.has_suppliers_access = (req.suppliers_access != "none")
+    user.has_hr_access = (req.hr_access != "none")
+    user.has_reports_access = (req.reports_access != "none")
+    
+    db.commit()
+    db.refresh(user)
+
+    log_action(db, current_user.id, "UPDATE_USER_PERMISSIONS", "users", user_id, {
+        "username": user.username,
+        "financial_access": user.financial_access,
+        "suppliers_access": user.suppliers_access,
+        "hr_access": user.hr_access,
+        "reports_access": user.reports_access
+    })
+    return user
 
 
 # Excluir Conta de Usuário (Apenas Admin)

@@ -23,6 +23,9 @@ class Group(Base):
     expenses = relationship("FinancialExpense", back_populates="group")
     audit_logs = relationship("AuditLog", back_populates="group")
     suppliers = relationship("Supplier", back_populates="group")
+    sectors = relationship("Sector", back_populates="group")
+    job_positions = relationship("JobPosition", back_populates="group")
+    work_scales = relationship("WorkScale", back_populates="group")
 
 class User(Base):
     __tablename__ = "users"
@@ -36,6 +39,13 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     password_reset_requested = Column(Boolean, default=False, nullable=False)
     has_financial_access = Column(Boolean, default=False, nullable=False)
+    has_suppliers_access = Column(Boolean, default=False, nullable=False)
+    has_reports_access = Column(Boolean, default=False, nullable=False)
+    has_hr_access = Column(Boolean, default=False, nullable=False)
+    financial_access = Column(String(20), default="none", nullable=False)
+    suppliers_access = Column(String(20), default="none", nullable=False)
+    hr_access = Column(String(20), default="none", nullable=False)
+    reports_access = Column(String(20), default="none", nullable=False)
     
     # Relationships
     group = relationship("Group", back_populates="users")
@@ -80,6 +90,12 @@ class Employee(Base):
     ctps = Column(String(30), nullable=True)
     pis = Column(String(30), nullable=True)
     reservista = Column(String(30), nullable=True)
+    sex = Column(String(20), nullable=True)
+    bank_name = Column(String(100), nullable=True)
+    bank_agency = Column(String(20), nullable=True)
+    bank_account = Column(String(30), nullable=True)
+    pix_key = Column(String(100), nullable=True)
+    notes = Column(Text, nullable=True)
     
     # Relationships
     group = relationship("Group", back_populates="employees")
@@ -90,6 +106,7 @@ class Employee(Base):
     shift = relationship("Shift", back_populates="employee", uselist=False, cascade="all, delete-orphan")
     overtime_records = relationship("Overtime", back_populates="employee", cascade="all, delete-orphan")
     leaves = relationship("Leave", back_populates="employee", cascade="all, delete-orphan")
+    documents = relationship("EmployeeDocument", back_populates="employee", cascade="all, delete-orphan")
 
 class Dependent(Base):
     __tablename__ = "dependents"
@@ -114,9 +131,17 @@ class Contract(Base):
     manager_name = Column(String(100), nullable=True)  # Nome do gestor responsável
     base_salary = Column(Float, nullable=False)
     benefits = Column(Text, nullable=True)  # Armazena JSON como texto (VT, VR, Plano de Saúde, etc.)
+    job_position_id = Column(String(36), ForeignKey("job_positions.id", ondelete="SET NULL"), nullable=True)
+    sector_id = Column(String(36), ForeignKey("sectors.id", ondelete="SET NULL"), nullable=True)
+    work_scale_id = Column(String(36), ForeignKey("work_scales.id", ondelete="SET NULL"), nullable=True)
+    contract_type = Column(String(50), default="CLT", nullable=False)
+    status = Column(String(20), default="Experiência", nullable=False)
     
     # Relationships
     employee = relationship("Employee", back_populates="contract")
+    job_position = relationship("JobPosition")
+    sector = relationship("Sector")
+    work_scale = relationship("WorkScale")
 
 class CareerHistory(Base):
     __tablename__ = "career_history"
@@ -298,3 +323,79 @@ class FinancialExpense(Base):
     # Relationships
     group = relationship("Group", back_populates="expenses")
     supplier = relationship("Supplier", back_populates="expenses")
+
+
+class Sector(Base):
+    __tablename__ = "sectors"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    group_id = Column(String(36), ForeignKey("groups.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_by = Column(String(50), nullable=True)
+    updated_by = Column(String(50), nullable=True)
+
+    # Relationships
+    group = relationship("Group", back_populates="sectors")
+
+
+class JobPosition(Base):
+    __tablename__ = "job_positions"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    group_id = Column(String(36), ForeignKey("groups.id", ondelete="CASCADE"), nullable=False)
+    sector_id = Column(String(36), ForeignKey("sectors.id", ondelete="SET NULL"), nullable=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    base_salary = Column(Float, nullable=False)
+    level = Column(String(50), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_by = Column(String(50), nullable=True)
+    updated_by = Column(String(50), nullable=True)
+
+    # Relationships
+    group = relationship("Group", back_populates="job_positions")
+    sector = relationship("Sector")
+
+
+class WorkScale(Base):
+    __tablename__ = "work_scales"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    group_id = Column(String(36), ForeignKey("groups.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    entry_time = Column(String(5), default="09:00", nullable=False)
+    exit_time = Column(String(5), default="18:00", nullable=False)
+    interval_minutes = Column(Integer, default=60, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_by = Column(String(50), nullable=True)
+    updated_by = Column(String(50), nullable=True)
+
+    # Relationships
+    group = relationship("Group", back_populates="work_scales")
+
+
+class EmployeeDocument(Base):
+    __tablename__ = "employee_documents"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    employee_id = Column(String(36), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    document_type = Column(String(50), nullable=False)
+    file_path = Column(String(255), nullable=True)
+    status = Column(String(20), default="Pendente", nullable=False)  # Pendente, Entregue, Vencido
+    due_date = Column(Date, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_by = Column(String(50), nullable=True)
+    updated_by = Column(String(50), nullable=True)
+
+    # Relationships
+    employee = relationship("Employee", back_populates="documents")

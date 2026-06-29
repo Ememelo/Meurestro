@@ -21,6 +21,9 @@ from app.api.financial import router as financial_router
 from app.api.backup import router as backup_router
 from app.api.groups import router as groups_router
 from app.api.suppliers import router as suppliers_router
+from app.api.sectors import router as sectors_router
+from app.api.job_positions import router as job_positions_router
+from app.api.work_scales import router as work_scales_router
 
 
 # Create Database tables on startup
@@ -188,6 +191,73 @@ def auto_migrate():
                 db.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
                 db.commit()
 
+        # 3c. Add new evolved HR columns
+        hr_new_cols = [
+            # Employees
+            ("employees", "sex", "VARCHAR(20)"),
+            ("employees", "bank_name", "VARCHAR(100)"),
+            ("employees", "bank_agency", "VARCHAR(20)"),
+            ("employees", "bank_account", "VARCHAR(30)"),
+            ("employees", "pix_key", "VARCHAR(100)"),
+            ("employees", "notes", "TEXT"),
+            # Contracts
+            ("contracts", "job_position_id", "VARCHAR(36)"),
+            ("contracts", "sector_id", "VARCHAR(36)"),
+            ("contracts", "work_scale_id", "VARCHAR(36)"),
+            ("contracts", "contract_type", "VARCHAR(50) DEFAULT 'CLT'"),
+            ("contracts", "status", "VARCHAR(20) DEFAULT 'Experiência'"),
+        ]
+        for table, col, col_type in hr_new_cols:
+            try:
+                db.execute(text(f"SELECT {col} FROM {table} LIMIT 1"))
+            except Exception:
+                db.rollback()
+                print(f"Auto-migration: Adding column {col} to {table} table...")
+                db.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
+                db.commit()
+
+        # Add new user permission columns
+        user_perm_cols = [
+            ("users", "has_suppliers_access", "BOOLEAN DEFAULT false"),
+            ("users", "has_reports_access", "BOOLEAN DEFAULT false"),
+            ("users", "has_hr_access", "BOOLEAN DEFAULT false"),
+            ("users", "financial_access", "VARCHAR(20) DEFAULT 'none'"),
+            ("users", "suppliers_access", "VARCHAR(20) DEFAULT 'none'"),
+            ("users", "hr_access", "VARCHAR(20) DEFAULT 'none'"),
+            ("users", "reports_access", "VARCHAR(20) DEFAULT 'none'"),
+        ]
+        for table, col, col_type in user_perm_cols:
+            try:
+                db.execute(text(f"SELECT {col} FROM {table} LIMIT 1"))
+            except Exception:
+                db.rollback()
+                print(f"Auto-migration: Adding column {col} to {table} table...")
+                db.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
+                db.commit()
+
+        # Migrate/set default permissions for roles
+        try:
+            db.execute(text("UPDATE users SET has_suppliers_access = 1, has_reports_access = 1, has_hr_access = 1 WHERE role IN ('admin', 'admin_delegado')"))
+            db.execute(text("UPDATE users SET has_hr_access = 1, has_reports_access = 1 WHERE role = 'rh'"))
+            db.execute(text("UPDATE users SET has_suppliers_access = 1 WHERE role = 'financeiro'"))
+            
+            # Grant full write access to admins, managers, and partners
+            db.execute(text("UPDATE users SET financial_access = 'write', suppliers_access = 'write', hr_access = 'write', reports_access = 'write' WHERE role IN ('admin', 'admin_delegado')"))
+            db.execute(text("UPDATE users SET hr_access = 'write', reports_access = 'write' WHERE role = 'rh'"))
+            db.execute(text("UPDATE users SET financial_access = 'write', suppliers_access = 'write' WHERE role = 'financeiro'"))
+            db.execute(text("UPDATE users SET financial_access = 'write', suppliers_access = 'write', hr_access = 'write', reports_access = 'write' WHERE role IN ('gestor', 'socio')"))
+            
+            # Map legacy boolean column values to new string column values if not set yet
+            db.execute(text("UPDATE users SET financial_access = 'write' WHERE has_financial_access = 1 AND financial_access = 'none'"))
+            db.execute(text("UPDATE users SET suppliers_access = 'write' WHERE has_suppliers_access = 1 AND suppliers_access = 'none'"))
+            db.execute(text("UPDATE users SET hr_access = 'write' WHERE has_hr_access = 1 AND hr_access = 'none'"))
+            db.execute(text("UPDATE users SET reports_access = 'write' WHERE has_reports_access = 1 AND reports_access = 'none'"))
+            
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"Auto-migration: Setting user permissions defaults failed: {e}")
+
         # 4. Check if at least one group exists. If not, create a default group.
         default_group = db.execute(text("SELECT id FROM groups LIMIT 1")).fetchone()
         if not default_group:
@@ -305,6 +375,15 @@ app.include_router(financial_router, prefix="/api")
 app.include_router(backup_router, prefix="/api")
 app.include_router(groups_router, prefix="/api")
 app.include_router(suppliers_router, prefix="/api")
+app.include_router(sectors_router, prefix="/api")
+app.include_router(job_positions_router, prefix="/api")
+app.include_router(work_scales_router, prefix="/api")
+
+
+@app.on_event("startup")
+def startup_event():
+    from app.services.backup_service import start_backup_scheduler
+    start_backup_scheduler()
 
 
 @app.get("/")

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { 
   LayoutDashboard, 
@@ -9,19 +9,19 @@ import {
   UtensilsCrossed,
   TrendingUp,
   Settings,
-  X
+  X,
+  Truck,
+  Briefcase,
+  Clock,
+  FolderKanban,
+  FileText,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react'
 
 const Sidebar = ({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) => {
   const { user, logout } = useAuth()
-
-  const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'admin_delegado', 'rh', 'socio', 'gestor', 'consulta'] },
-    { id: 'employees', label: 'Colaboradores', icon: Users, roles: ['admin', 'admin_delegado', 'rh', 'socio', 'gestor', 'consulta'] },
-    { id: 'financial', label: 'Financeiro', icon: TrendingUp, roles: ['admin', 'admin_delegado', 'socio'] },
-    { id: 'reports', label: 'Relatórios', icon: FileSpreadsheet, roles: ['admin', 'admin_delegado', 'rh', 'socio'] },
-    { id: 'settings', label: 'Acesso & Usuários', icon: Settings, roles: ['admin', 'admin_delegado', 'rh', 'socio', 'gestor', 'consulta'] }
-  ]
+  const [hrExpanded, setHrExpanded] = useState(true)
 
   const getRoleLabel = (role) => {
     const labels = {
@@ -30,6 +30,7 @@ const Sidebar = ({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) => {
       rh: 'Recursos Humanos',
       socio: 'Sócio-Diretor',
       gestor: 'Gestor de Equipe',
+      financeiro: 'Time Financeiro',
       consulta: 'Somente Leitura'
     }
     return labels[role] || role
@@ -65,33 +66,129 @@ const Sidebar = ({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) => {
             <X className="w-5 h-5" />
           </button>
         </div>
-
+ 
       {/* Navigation Items */}
       <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-        {menuItems.map((item) => {
-          let hasAccess = item.roles.includes(user?.role)
-          if (item.id === 'financial' && user?.has_financial_access) {
-            hasAccess = true
-          }
-          if (!hasAccess) return null
-          const Icon = item.icon
-          const isActive = activeTab === item.id
+        {/* Executive Dashboard */}
+        {['admin', 'admin_delegado', 'rh', 'socio', 'gestor', 'consulta', 'financeiro'].includes(user?.role) && (
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+              activeTab === 'dashboard'
+                ? 'bg-amber-600 text-white shadow-md shadow-amber-900/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <LayoutDashboard className={`w-5 h-5 ${activeTab === 'dashboard' ? 'text-white' : 'text-slate-400'}`} />
+            Dashboard Executivo
+          </button>
+        )}
 
-          return (
+        {/* Recursos Humanos Collapsible Submenu */}
+        {(['admin', 'admin_delegado', 'rh'].includes(user?.role) || user?.hr_access !== 'none' || user?.has_hr_access) && (
+          <div className="space-y-1">
             <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                isActive 
-                  ? 'bg-amber-600 text-white shadow-md shadow-amber-900/30' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-              }`}
+              onClick={() => setHrExpanded(!hrExpanded)}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-bold text-slate-300 hover:text-white hover:bg-slate-800/50 transition-all cursor-pointer"
             >
-              <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-              {item.label}
+              <div className="flex items-center gap-3">
+                <Users className="w-5 h-5 text-slate-400" />
+                <span>Recursos Humanos</span>
+              </div>
+              {hrExpanded ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
             </button>
-          )
-        })}
+            
+            {hrExpanded && (
+              <div className="pl-6 border-l border-slate-800 ml-6 space-y-1.5 py-1">
+                {[
+                  { id: 'hr_dashboard', label: 'Dashboard', icon: LayoutDashboard },
+                  { id: 'employees', label: 'Colaboradores', icon: Users },
+                  { id: 'hr_job_positions', label: 'Cargos', icon: Briefcase },
+                  { id: 'hr_sectors', label: 'Setores', icon: FolderKanban },
+                  { id: 'hr_work_scales', label: 'Escalas', icon: Clock },
+                  { id: 'hr_documents', label: 'Documentos', icon: FileText }
+                ].map(sub => {
+                  const SubIcon = sub.icon
+                  const isActive = activeTab === sub.id
+                  return (
+                    <button
+                      key={sub.id}
+                      onClick={() => setActiveTab(sub.id)}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        isActive 
+                          ? 'bg-amber-600 text-white shadow shadow-amber-900/20' 
+                          : 'text-slate-400 hover:text-white hover:bg-slate-800/30'
+                      }`}
+                    >
+                      <SubIcon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                      {sub.label}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Fornecedores */}
+        {((['admin', 'admin_delegado', 'socio', 'gestor', 'financeiro'].includes(user?.role)) || user?.suppliers_access !== 'none' || user?.has_suppliers_access || user?.financial_access !== 'none' || user?.has_financial_access) && (
+          <button
+            onClick={() => setActiveTab('suppliers')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+              activeTab === 'suppliers'
+                ? 'bg-amber-600 text-white shadow-md shadow-amber-900/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <Truck className={`w-5 h-5 ${activeTab === 'suppliers' ? 'text-white' : 'text-slate-400'}`} />
+            Fornecedores
+          </button>
+        )}
+
+        {/* Financeiro */}
+        {((['admin', 'admin_delegado', 'socio', 'gestor', 'financeiro'].includes(user?.role)) || user?.financial_access !== 'none' || user?.has_financial_access) && (
+          <button
+            onClick={() => setActiveTab('financial')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+              activeTab === 'financial'
+                ? 'bg-amber-600 text-white shadow-md shadow-amber-900/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <TrendingUp className={`w-5 h-5 ${activeTab === 'financial' ? 'text-white' : 'text-slate-400'}`} />
+            Financeiro
+          </button>
+        )}
+
+        {/* Relatórios */}
+        {((['admin', 'admin_delegado', 'rh', 'socio'].includes(user?.role)) || user?.reports_access !== 'none' || user?.has_reports_access) && (
+          <button
+            onClick={() => setActiveTab('reports')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+              activeTab === 'reports'
+                ? 'bg-amber-600 text-white shadow-md shadow-amber-900/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <FileSpreadsheet className={`w-5 h-5 ${activeTab === 'reports' ? 'text-white' : 'text-slate-400'}`} />
+            Relatórios
+          </button>
+        )}
+
+        {/* Acesso & Usuários (Settings) */}
+        {['admin', 'admin_delegado', 'rh', 'socio', 'gestor', 'consulta', 'financeiro'].includes(user?.role) && (
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+              activeTab === 'settings'
+                ? 'bg-amber-600 text-white shadow-md shadow-amber-900/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <Settings className={`w-5 h-5 ${activeTab === 'settings' ? 'text-white' : 'text-slate-400'}`} />
+            Acesso & Usuários
+          </button>
+        )}
       </nav>
 
       {/* User Info & Footer */}
