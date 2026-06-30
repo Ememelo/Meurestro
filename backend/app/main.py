@@ -359,6 +359,16 @@ def auto_migrate():
             db.execute(text(f"UPDATE financial_expenses SET user_id = '{admin_user.id}' WHERE user_id IS NULL"))
             db.commit()
 
+        # Prepopulate default work scales for all groups
+        try:
+            from app.services.restaurant_defaults import prepopulate_group_scales
+            from app.models.all_models import Group
+            all_groups = db.query(Group).all()
+            for g in all_groups:
+                prepopulate_group_scales(db, g.id)
+        except Exception as e:
+            print(f"Auto-migration: Prepopulating group scales failed: {e}")
+
     except Exception as e:
         print(f"Auto-migration error: {e}")
     finally:

@@ -120,6 +120,15 @@ const HRWorkScales = () => {
             {editingId ? 'Editar Escala' : 'Cadastrar Nova Escala'}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="bg-amber-50 border border-amber-200 text-slate-700 rounded-xl p-3.5 text-xs space-y-1.5 shadow-sm">
+              <span className="font-bold text-amber-800 uppercase tracking-wider block">Regras de Intervalo Intrajornada (CLT)</span>
+              <p className="leading-relaxed text-[11px] font-medium text-slate-600">
+                • <strong>Jornada até 4h diárias</strong>: Sem obrigatoriedade de intervalo.<br />
+                • <strong>Jornada de 4h a 6h diárias</strong>: Intervalo mínimo obrigatório de 15 minutos.<br />
+                • <strong>Jornada acima de 6h diárias</strong>: Intervalo mínimo de 1 hora e máximo de 2 horas.
+              </p>
+            </div>
+
             <div>
               <label className="form-label font-bold text-slate-700 text-xs block mb-1">Nome da Escala</label>
               <input
