@@ -288,7 +288,8 @@ def update_employee(
         "address_cep", "address_street", "address_number", "address_complement",
         "address_neighborhood", "address_city", "address_state", "mother_name", "father_name",
         "has_disability", "disability_details", "education", "ctps", "pis", "reservista",
-        "sex", "bank_name", "bank_agency", "bank_account", "pix_key", "notes"
+        "sex", "bank_name", "bank_agency", "bank_account", "pix_key", "notes",
+        "termination_date", "termination_reason"
     ]
     
     for field in personal_fields:
@@ -304,6 +305,9 @@ def update_employee(
         log_career(db, employee_id, current_user.username, "status", db_emp.status, emp_update.status, emp_update.reason_for_change)
         audit_changes["status"] = [db_emp.status, emp_update.status]
         db_emp.status = emp_update.status
+        if emp_update.status == "terminated":
+            db_emp.termination_date = emp_update.termination_date or datetime.utcnow().date()
+            db_emp.termination_reason = emp_update.termination_reason or emp_update.reason_for_change
         
     # Update Contract and check career history triggers
     if db_emp.contract:
@@ -630,5 +634,103 @@ def delete_employee_document(
     db.commit()
     log_action(db, current_user.id, "DELETE_DOCUMENT", "employee_documents", document_id)
     return {"message": "Documento excluído com sucesso."}
+
+
+@router.get("/{employee_id}/worked-time")
+def get_employee_worked_time(
+    employee_id: str,
+    year: int,
+    month: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from sqlalchemy import extract, func
+    from datetime import date, timedelta
+    from app.models.all_models import Overtime, Leave, Contract, WorkScale
+    
+    db_emp = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not db_emp:
+        raise HTTPException(status_code=404, detail="Colaborador não encontrado")
+    if current_user.role != "admin" and db_emp.group_id != current_user.group_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    contract = db_emp.contract
+    base_salary = contract.base_salary if contract else 0.0
+    
+    daily_hours = 8.0
+    weekly_hours = 44.0
+    monthly_hours = 220.0
+    scale_name = "Não definida"
+
+    if contract and contract.work_scale:
+        scale = contract.work_scale
+        scale_name = scale.name
+        try:
+            ent_h, ent_m = map(int, scale.entry_time.split(":"))
+            ex_h, ex_m = map(int, scale.exit_time.split(":"))
+            total_min = (ex_h * 60 + ex_m) - (ent_h * 60 + ent_m) - scale.interval_minutes
+            daily_hours = max(0.0, total_min / 60.0)
+        except Exception:
+            daily_hours = 8.0
+
+        days_per_week = 5
+        desc = (scale.description or "").lower() + " " + scale.name.lower()
+        if "6x1" in desc:
+            days_per_week = 6
+        elif "12x36" in desc:
+            days_per_week = 3.5
+            
+        weekly_hours = daily_hours * days_per_week
+        monthly_hours = weekly_hours * 5.0
+
+    overtimes = db.query(Overtime).filter(
+        Overtime.employee_id == employee_id,
+        Overtime.status.in_(["approved", "paid"]),
+        extract("year", Overtime.date) == year,
+        extract("month", Overtime.date) == month
+    ).all()
+
+    total_ot_min = sum(ot.hours_50_minutes + ot.hours_100_minutes + ot.hours_night_minutes for ot in overtimes)
+    total_ot_hours = total_ot_min / 60.0
+    total_ot_payment = sum(ot.calculated_payment for ot in overtimes)
+
+    leaves = db.query(Leave).filter(
+        Leave.employee_id == employee_id,
+        func.lower(Leave.reason).contains("falta"),
+        extract("year", Leave.start_date) == year,
+        extract("month", Leave.start_date) == month
+    ).all()
+
+    absent_days = 0
+    for leave in leaves:
+        start = max(leave.start_date, date(year, month, 1))
+        if month == 12:
+            last_day = date(year + 1, 1, 1) - timedelta(days=1)
+        else:
+            last_day = date(year, month + 1, 1) - timedelta(days=1)
+        end = min(leave.end_date, last_day)
+        
+        if end >= start:
+            absent_days += (end - start).days + 1
+
+    absence_hours = absent_days * daily_hours
+    absence_discount = (base_salary / 30.0) * absent_days
+
+    actual_worked_hours = max(0.0, monthly_hours + total_ot_hours - absence_hours)
+
+    return {
+        "daily_hours": round(daily_hours, 1),
+        "weekly_hours": round(weekly_hours, 1),
+        "monthly_hours": round(monthly_hours, 1),
+        "scale_name": scale_name,
+        "overtime_hours": round(total_ot_hours, 2),
+        "overtime_payment": round(total_ot_payment, 2),
+        "absent_days": absent_days,
+        "absence_hours": round(absence_hours, 1),
+        "absence_discount": round(absence_discount, 2),
+        "actual_worked_hours": round(actual_worked_hours, 2),
+        "base_salary": base_salary
+    }
+
 
 

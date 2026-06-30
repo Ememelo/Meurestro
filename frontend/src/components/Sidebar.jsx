@@ -146,6 +146,21 @@ const Sidebar = ({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) => {
           </button>
         )}
 
+        {/* Clientes */}
+        {((['admin', 'admin_delegado', 'socio', 'gestor', 'financeiro'].includes(user?.role)) || user?.financial_access !== 'none' || user?.has_financial_access) && (
+          <button
+            onClick={() => setActiveTab('clients')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+              activeTab === 'clients'
+                ? 'bg-amber-600 text-white shadow-md shadow-amber-900/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <Users className={`w-5 h-5 ${activeTab === 'clients' ? 'text-white' : 'text-slate-400'}`} />
+            Clientes
+          </button>
+        )}
+
         {/* Controle de Estoque */}
         {['admin', 'admin_delegado', 'socio', 'gestor', 'financeiro'].includes(user?.role) && (
           <button

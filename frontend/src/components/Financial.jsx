@@ -27,6 +27,7 @@ import {
   Truck,
   FileText
 } from 'lucide-react'
+import SearchableSelect from './SearchableSelect'
 
 const Financial = ({ forceSubTab }) => {
   const currentYear = new Date().getFullYear()
@@ -221,6 +222,29 @@ const Financial = ({ forceSubTab }) => {
 
       const suppRes = await api.get('/suppliers')
       setSuppliers(suppRes.data)
+
+      // Fetch clients, employees and salary adjustments
+      try {
+        const clientsRes = await api.get('/clients')
+        setClients(clientsRes.data)
+      } catch (cErr) {
+        console.warn('Failed to load clients:', cErr)
+      }
+
+      try {
+        const empRes = await api.get('/employees')
+        setEmployees(empRes.data)
+      } catch (eErr) {
+        console.warn('Failed to load employees:', eErr)
+      }
+
+      try {
+        const targetMonth = month !== null ? month : currentMonth
+        const adjRes = await api.get(`/financial/salary-adjustments?year=${year}&month=${targetMonth}`)
+        setSalaryAdjustments(adjRes.data)
+      } catch (aErr) {
+        console.warn('Failed to load salary adjustments:', aErr)
+      }
 
       // Set default supplier in form if empty
       if (suppRes.data.length > 0 && !expForm.supplier_id) {
@@ -455,45 +479,62 @@ const Financial = ({ forceSubTab }) => {
     }
   }
 
+  const handleSaveClient = async (e) => {
+    e.preventDefault()
+    try {
+      if (editingItem && editingItem.type === 'client') {
+        await api.put(`/clients/${editingItem.id}`, clientForm)
+        setSuccess('Cliente parceiro atualizado com sucesso!')
+      } else {
+        await api.post('/clients', clientForm)
+        setSuccess('Cliente parceiro cadastrado com sucesso!')
+      }
+      setShowClientModal(false)
+      const clis = await api.get('/clients')
+      setClients(clis.data)
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      console.error(err)
+      setError(err.response?.data?.detail || 'Erro ao salvar cliente parceiro.')
+    }
+  }
+
+  const handleSaveSalaryAdjustment = async (e) => {
+    e.preventDefault()
+    const payload = {
+      ...salaryForm,
+      vacation_payment: parseFloat(salaryForm.vacation_payment || '0'),
+      discount: parseFloat(salaryForm.discount || '0')
+    }
+    try {
+      await api.post('/financial/salary-adjustments', payload)
+      setSuccess('Lançamento de folha de pagamento atualizado com sucesso!')
+      setShowSalaryModal(false)
+      const targetMonth = month !== null ? month : currentMonth
+      const adjRes = await api.get(`/financial/salary-adjustments?year=${year}&month=${targetMonth}`)
+      setSalaryAdjustments(adjRes.data)
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      console.error(err)
+      setError(err.response?.data?.detail || 'Erro ao salvar lançamentos do salário.')
+    }
+  }
+
   // Deletion / Cancellation Handlers
   const handleDeleteItem = async (type, item) => {
-    const isClosed = item.status === 'Recebido' || item.status === 'Pago' || item.status === 'Cancelado'
-    if (isClosed) {
-      // Prompt to cancel since deletion of paid/received elements is blocked
-      if (!confirm('Movimentações pagas ou recebidas não podem ser excluídas física/permanentemente para manter a integridade fiscal. Deseja CANCELAR este lançamento?')) return
-      
-      const payload = {
-        ...item,
-        status: 'Cancelado'
+    if (!confirm(`Tem certeza de que deseja excluir permanentemente o lançamento "${item.description}"?`)) return
+    try {
+      if (type === 'revenue') {
+        await api.delete(`/financial/revenues/${item.id}`)
+      } else {
+        await api.delete(`/financial/expenses/${item.id}`)
       }
-      try {
-        if (type === 'revenue') {
-          await api.put(`/financial/revenues/${item.id}`, payload)
-        } else {
-          await api.put(`/financial/expenses/${item.id}`, payload)
-        }
-        setSuccess('Lançamento cancelado com sucesso!')
-        fetchFinancialData()
-        setTimeout(() => setSuccess(null), 3000)
-      } catch (err) {
-        console.error(err)
-        setError('Erro ao cancelar lançamento.')
-      }
-    } else {
-      if (!confirm('Tem certeza de que deseja excluir permanentemente este lançamento pendente?')) return
-      try {
-        if (type === 'revenue') {
-          await api.delete(`/financial/revenues/${item.id}`)
-        } else {
-          await api.delete(`/financial/expenses/${item.id}`)
-        }
-        setSuccess('Lançamento excluído com sucesso!')
-        fetchFinancialData()
-        setTimeout(() => setSuccess(null), 3000)
-      } catch (err) {
-        console.error(err)
-        setError('Erro ao excluir lançamento.')
-      }
+      setSuccess('Lançamento excluído com sucesso!')
+      fetchFinancialData()
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      console.error(err)
+      setError('Erro ao excluir lançamento.')
     }
   }
 
@@ -675,7 +716,7 @@ const Financial = ({ forceSubTab }) => {
       )}
 
       {/* Internal Navigation Sub-tabs */}
-      {subTab !== 'suppliers' && (
+      {subTab !== 'suppliers' && subTab !== 'clients' && (
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap gap-2">
           <button 
             onClick={() => setSubTab('dashboard')}
@@ -702,6 +743,14 @@ const Financial = ({ forceSubTab }) => {
             Pagamentos
           </button>
           <button 
+            onClick={() => setSubTab('salaries')}
+            className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all cursor-pointer ${
+              subTab === 'salaries' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+            }`}
+          >
+            Salários
+          </button>
+          <button 
             onClick={() => setSubTab('reports')}
             className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all cursor-pointer ${
               subTab === 'reports' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
@@ -712,19 +761,21 @@ const Financial = ({ forceSubTab }) => {
         </div>
       )}
 
-      {/* Date controls for filtering (hidden only for suppliers) */}
-      {subTab !== 'suppliers' && (
+      {/* Date controls for filtering (hidden for suppliers and clients) */}
+      {subTab !== 'suppliers' && subTab !== 'clients' && (
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
           <div>
             <h2 className="text-lg font-black text-slate-800 tracking-tight">
               {subTab === 'dashboard' ? 'Demonstrativo Financeiro' : 
                subTab === 'revenues' ? 'Filtro de Recebimentos' : 
-               subTab === 'payments' ? 'Filtro de Pagamentos' : 'Período de Referência'}
+               subTab === 'payments' ? 'Filtro de Pagamentos' : 
+               subTab === 'salaries' ? 'Salários e Folha de Pagamento' : 'Período de Referência'}
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
               {subTab === 'dashboard' ? 'Ano de referência e fechamento consolidado' : 
                subTab === 'revenues' ? 'Período de referência para visualização de entradas' : 
-               subTab === 'payments' ? 'Período de referência para visualização de saídas' : 'Selecione o ano e mês para filtragem'}
+               subTab === 'payments' ? 'Período de referência para visualização de saídas' : 
+               subTab === 'salaries' ? 'Lançamento mensal de férias, adicionais e descontos' : 'Selecione o ano e mês para filtragem'}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -1233,16 +1284,15 @@ const Financial = ({ forceSubTab }) => {
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Fornecedor</label>
-              <select 
+              <SearchableSelect
+                options={[
+                  { value: '', label: 'Todos' },
+                  ...suppliers.map(s => ({ value: s.id, label: s.trade_name }))
+                ]}
                 value={reportFilters.supplier_id}
-                onChange={(e) => setReportFilters(prev => ({ ...prev, supplier_id: e.target.value }))}
-                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-amber-500"
-              >
-                <option value="">Todos</option>
-                {suppliers.map(s => (
-                  <option key={s.id} value={s.id}>{s.trade_name}</option>
-                ))}
-              </select>
+                onChange={(val) => setReportFilters(prev => ({ ...prev, supplier_id: val }))}
+                placeholder="Busque o fornecedor..."
+              />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Categoria</label>
@@ -1309,6 +1359,192 @@ const Financial = ({ forceSubTab }) => {
               <FileText className="w-4 h-4 text-rose-400" />
               Download PDF (.pdf)
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* SUB-TAB: CLIENTES */}
+      {subTab === 'clients' && (
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h3 className="text-lg font-black text-slate-800">Cadastro de Clientes Parceiros</h3>
+              <p className="text-xs text-slate-400">Gerenciamento de parcerias corporativas e faturamento</p>
+            </div>
+            <button 
+              onClick={() => {
+                setEditingItem(null)
+                setClientForm({
+                  corporate_name: '',
+                  trade_name: '',
+                  cnpj: '',
+                  contact_person: '',
+                  phone: '',
+                  whatsapp: '',
+                  email: '',
+                  address: '',
+                  is_active: true
+                })
+                setShowClientModal(true)
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer shadow-md transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              Novo Cliente
+            </button>
+          </div>
+
+          <div className="overflow-x-auto border border-slate-100 rounded-xl">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 uppercase tracking-widest text-[9px] font-extrabold">
+                <tr>
+                  <th className="px-6 py-3">Nome Fantasia</th>
+                  <th className="px-6 py-3">CNPJ</th>
+                  <th className="px-6 py-3">Contato</th>
+                  <th className="px-6 py-3">Telefone</th>
+                  <th className="px-6 py-3 text-center">Status</th>
+                  <th className="px-6 py-3 text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-600">
+                {clients.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-8 text-center text-slate-400">
+                      Nenhum cliente parceiro cadastrado.
+                    </td>
+                  </tr>
+                ) : (
+                  clients.map((c) => (
+                    <tr key={c.id} className="hover:bg-slate-50/50">
+                      <td className="px-6 py-4 font-bold text-slate-700">{c.trade_name}</td>
+                      <td className="px-6 py-4 text-slate-600">{c.cnpj || 'N/A'}</td>
+                      <td className="px-6 py-4 text-slate-600">{c.contact_person || 'N/A'}</td>
+                      <td className="px-6 py-4 text-slate-600">{c.phone || 'N/A'}</td>
+                      <td className="px-6 py-4 text-center">
+                        <span className={`px-3 py-1 rounded-full text-[10px] uppercase font-bold tracking-wider ${c.is_active ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-500 border border-slate-300'}`}>
+                          {c.is_active ? 'Ativo' : 'Inativo'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex justify-center gap-2">
+                          <button 
+                            onClick={() => {
+                              setEditingItem({ type: 'client', id: c.id })
+                              setClientForm({ ...c })
+                              setShowClientModal(true)
+                            }}
+                            className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-lg cursor-pointer"
+                            title="Editar"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={async () => {
+                              if (window.confirm(`Deseja realmente excluir o cliente ${c.trade_name}?`)) {
+                                try {
+                                  await api.delete(`/clients/${c.id}`)
+                                  setSuccess('Cliente excluído com sucesso!')
+                                  const clis = await api.get('/clients')
+                                  setClients(clis.data)
+                                  setTimeout(() => setSuccess(null), 3000)
+                                } catch (err) {
+                                  console.error(err)
+                                  setError('Erro ao excluir cliente.')
+                                }
+                              }
+                            }}
+                            className="p-1.5 hover:bg-rose-50 text-rose-500 hover:text-rose-700 rounded-lg cursor-pointer"
+                            title="Excluir"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* SUB-TAB: SALÁRIOS */}
+      {subTab === 'salaries' && (
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+          <div>
+            <h3 className="text-lg font-black text-slate-800">Lançamento de Férias e Descontos</h3>
+            <p className="text-xs text-slate-400">Adicione pagamentos de férias ou descontos personalizados para o mês selecionado</p>
+          </div>
+
+          <div className="overflow-x-auto border border-slate-100 rounded-xl">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 uppercase tracking-widest text-[9px] font-extrabold">
+                <tr>
+                  <th className="px-6 py-3">Funcionário</th>
+                  <th className="px-6 py-3">Cargo</th>
+                  <th className="px-6 py-3 text-right">Salário Contratual</th>
+                  <th className="px-6 py-3 text-right">Adicional Férias</th>
+                  <th className="px-6 py-3 text-right">Descontos do Mês</th>
+                  <th className="px-6 py-3 text-right font-black">Custo Líquido</th>
+                  <th className="px-6 py-3">Observações</th>
+                  <th className="px-6 py-3 text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-600">
+                {employees.length === 0 ? (
+                  <tr>
+                    <td colSpan="8" className="px-6 py-8 text-center text-slate-400">
+                      Nenhum funcionário ativo cadastrado para este grupo.
+                    </td>
+                  </tr>
+                ) : (
+                  employees.map((emp) => {
+                    const adj = salaryAdjustments.find(a => a.employee_id === emp.id) || { vacation_payment: 0, discount: 0, notes: '' }
+                    const contractSalary = emp.base_salary || 0
+                    const finalSalary = contractSalary + adj.vacation_payment - adj.discount
+
+                    return (
+                      <tr key={emp.id} className="hover:bg-slate-50/50">
+                        <td className="px-6 py-4 font-bold text-slate-700">{emp.name}</td>
+                        <td className="px-6 py-4 text-slate-600">{emp.role || 'N/A'}</td>
+                        <td className="px-6 py-4 text-right text-slate-600">
+                          {contractSalary.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </td>
+                        <td className="px-6 py-4 text-right text-emerald-600 font-bold">
+                          {adj.vacation_payment > 0 ? `+ ${adj.vacation_payment.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : '-'}
+                        </td>
+                        <td className="px-6 py-4 text-right text-rose-600 font-bold">
+                          {adj.discount > 0 ? `- ${adj.discount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : '-'}
+                        </td>
+                        <td className="px-6 py-4 text-right text-slate-800 font-black">
+                          {finalSalary.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </td>
+                        <td className="px-6 py-4 text-slate-500 italic max-w-xs truncate">{adj.notes || '-'}</td>
+                        <td className="px-6 py-4 text-center">
+                          <button 
+                            onClick={() => {
+                              setSalaryForm({
+                                employee_id: emp.id,
+                                year: year,
+                                month: month || currentMonth,
+                                vacation_payment: adj.vacation_payment ? adj.vacation_payment.toString() : '',
+                                discount: adj.discount ? adj.discount.toString() : '',
+                                notes: adj.notes || ''
+                              })
+                              setShowSalaryModal(true)
+                            }}
+                            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider cursor-pointer"
+                          >
+                            Lançar
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -1412,13 +1648,22 @@ const Financial = ({ forceSubTab }) => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Cliente (Opcional)</label>
-                <input 
-                  type="text" 
-                  value={revForm.client}
-                  onChange={(e) => setRevForm(prev => ({ ...prev, client: e.target.value }))}
-                  placeholder="Nome do cliente/empresa"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-amber-500"
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Cliente Parceiro (Opcional)</label>
+                <SearchableSelect
+                  options={[
+                    { value: '', label: 'Nenhum / Cliente Avulso' },
+                    ...clients.map(c => ({ value: c.id, label: c.trade_name }))
+                  ]}
+                  value={revForm.client_id || ''}
+                  onChange={(val) => {
+                    const selectedClient = clients.find(c => c.id === val)
+                    setRevForm(prev => ({
+                      ...prev,
+                      client_id: val,
+                      client: selectedClient ? selectedClient.trade_name : ''
+                    }))
+                  }}
+                  placeholder="Selecione ou busque o cliente..."
                 />
               </div>
 
@@ -1477,16 +1722,15 @@ const Financial = ({ forceSubTab }) => {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Fornecedor</label>
-                  <select
+                  <SearchableSelect
+                    options={[
+                      { value: '', label: 'Nenhum' },
+                      ...suppliers.map(s => ({ value: s.id, label: s.trade_name }))
+                    ]}
                     value={expForm.supplier_id}
-                    onChange={(e) => setExpForm(prev => ({ ...prev, supplier_id: e.target.value }))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-amber-500"
-                  >
-                    <option value="">Nenhum</option>
-                    {suppliers.map(s => (
-                      <option key={s.id} value={s.id}>{s.trade_name}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setExpForm(prev => ({ ...prev, supplier_id: val }))}
+                    placeholder="Selecione ou busque o fornecedor..."
+                  />
                 </div>
               </div>
 
@@ -1831,6 +2075,192 @@ const Financial = ({ forceSubTab }) => {
               <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
                 <button type="button" onClick={() => setShowSuppModal(false)} className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-500 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer">Cancelar</button>
                 <button type="submit" className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer shadow-md">Salvar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CLIENT MODAL */}
+      {showClientModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-xl overflow-hidden animate-slideUp">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="font-black text-slate-800 text-base">{editingItem ? 'Editar Cliente' : 'Cadastrar Cliente'}</h3>
+              <button onClick={() => setShowClientModal(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleSaveClient} className="p-6 space-y-4 max-h-[500px] overflow-y-auto">
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Razão Social</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={clientForm.corporate_name}
+                    onChange={(e) => setClientForm(prev => ({ ...prev, corporate_name: e.target.value }))}
+                    placeholder="Ex: Refeições Lira LTDA"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Nome Fantasia</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={clientForm.trade_name}
+                    onChange={(e) => setClientForm(prev => ({ ...prev, trade_name: e.target.value }))}
+                    placeholder="Ex: Parceria Almoço Lira"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">CNPJ</label>
+                  <input 
+                    type="text" 
+                    value={clientForm.cnpj}
+                    onChange={(e) => setClientForm(prev => ({ ...prev, cnpj: e.target.value }))}
+                    placeholder="00.000.000/0001-00"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Pessoa de Contato</label>
+                  <input 
+                    type="text" 
+                    value={clientForm.contact_person}
+                    onChange={(e) => setClientForm(prev => ({ ...prev, contact_person: e.target.value }))}
+                    placeholder="Nome do gestor parceiro"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Telefone</label>
+                  <input 
+                    type="text" 
+                    value={clientForm.phone}
+                    onChange={(e) => setClientForm(prev => ({ ...prev, phone: e.target.value }))}
+                    placeholder="(00) 0000-0000"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">WhatsApp</label>
+                  <input 
+                    type="text" 
+                    value={clientForm.whatsapp}
+                    onChange={(e) => setClientForm(prev => ({ ...prev, whatsapp: e.target.value }))}
+                    placeholder="(00) 90000-0000"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">E-mail</label>
+                  <input 
+                    type="email" 
+                    value={clientForm.email}
+                    onChange={(e) => setClientForm(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="email@parceiro.com"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Endereço</label>
+                <input 
+                  type="text" 
+                  value={clientForm.address}
+                  onChange={(e) => setClientForm(prev => ({ ...prev, address: e.target.value }))}
+                  placeholder="Rua, Número, Bairro, Cidade"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Status</label>
+                <select 
+                  value={clientForm.is_active ? 'true' : 'false'}
+                  onChange={(e) => setClientForm(prev => ({ ...prev, is_active: e.target.value === 'true' }))}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-amber-500 font-bold"
+                >
+                  <option value="true">Ativo</option>
+                  <option value="false">Inativo</option>
+                </select>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
+                <button type="button" onClick={() => setShowClientModal(false)} className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-500 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer">Cancelar</button>
+                <button type="submit" className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer shadow-md">Salvar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* SALARY ADJUSTMENT MODAL */}
+      {showSalaryModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden animate-slideUp">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="font-black text-slate-800 text-base">Lançamento de Férias & Descontos</h3>
+              <button onClick={() => setShowSalaryModal(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleSaveSalaryAdjustment} className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Funcionário</label>
+                <input 
+                  type="text" 
+                  disabled
+                  value={employees.find(e => e.id === salaryForm.employee_id)?.name || ''}
+                  className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-500 font-bold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Adicional Férias (R$)</label>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    value={salaryForm.vacation_payment}
+                    onChange={(e) => setSalaryForm(prev => ({ ...prev, vacation_payment: e.target.value }))}
+                    placeholder="0.00"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Descontos do Mês (R$)</label>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    value={salaryForm.discount}
+                    onChange={(e) => setSalaryForm(prev => ({ ...prev, discount: e.target.value }))}
+                    placeholder="0.00"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Observações / Justificativa</label>
+                <textarea 
+                  value={salaryForm.notes}
+                  onChange={(e) => setSalaryForm(prev => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Justifique as férias ou os descontos..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-amber-500 h-20"
+                />
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
+                <button type="button" onClick={() => setShowSalaryModal(false)} className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-500 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer">Cancelar</button>
+                <button type="submit" className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer shadow-md">Salvar Lançamento</button>
               </div>
             </form>
           </div>

@@ -25,6 +25,7 @@ from app.api.sectors import router as sectors_router
 from app.api.job_positions import router as job_positions_router
 from app.api.work_scales import router as work_scales_router
 from app.api.inventory import router as inventory_router
+from app.api.clients import router as clients_router
 
 
 # Create Database tables on startup
@@ -87,12 +88,63 @@ def auto_migrate():
             """))
             db.commit()
 
+        # Create clients table if not exists
+        try:
+            db.execute(text("SELECT id FROM clients LIMIT 1"))
+        except Exception:
+            db.rollback()
+            print("Auto-migration: Creating clients table...")
+            db.execute(text("""
+                CREATE TABLE clients (
+                    id VARCHAR(36) PRIMARY KEY,
+                    group_id VARCHAR(36),
+                    corporate_name VARCHAR(255) NOT NULL,
+                    trade_name VARCHAR(255) NOT NULL,
+                    cnpj VARCHAR(20),
+                    contact_person VARCHAR(100),
+                    phone VARCHAR(20),
+                    whatsapp VARCHAR(20),
+                    email VARCHAR(100),
+                    address VARCHAR(255),
+                    is_active BOOLEAN DEFAULT true NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_by VARCHAR(50),
+                    updated_by VARCHAR(50)
+                )
+            """))
+            db.commit()
+
+        # Create salary_adjustments table if not exists
+        try:
+            db.execute(text("SELECT id FROM salary_adjustments LIMIT 1"))
+        except Exception:
+            db.rollback()
+            print("Auto-migration: Creating salary_adjustments table...")
+            db.execute(text("""
+                CREATE TABLE salary_adjustments (
+                    id VARCHAR(36) PRIMARY KEY,
+                    employee_id VARCHAR(36) NOT NULL,
+                    year INTEGER NOT NULL,
+                    month INTEGER NOT NULL,
+                    vacation_payment FLOAT DEFAULT 0.0 NOT NULL,
+                    discount FLOAT DEFAULT 0.0 NOT NULL,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            db.commit()
+
         # 2. Add ctps, pis, reservista, user_id, password_reset_requested, has_financial_access (old migrations)
         columns_to_add = {
             "ctps": ("employees", "VARCHAR(30)"),
             "pis": ("employees", "VARCHAR(30)"),
             "reservista": ("employees", "VARCHAR(30)"),
             "user_id": ("employees", "VARCHAR(36)"),
+            "termination_date": ("employees", "DATE"),
+            "termination_reason": ("employees", "TEXT"),
+            "client_id": ("financial_revenues", "VARCHAR(36)"),
         }
         for col_name, (table_name, col_type) in columns_to_add.items():
             try:
@@ -380,6 +432,7 @@ app.include_router(sectors_router, prefix="/api")
 app.include_router(job_positions_router, prefix="/api")
 app.include_router(work_scales_router, prefix="/api")
 app.include_router(inventory_router, prefix="/api")
+app.include_router(clients_router, prefix="/api")
 
 
 @app.on_event("startup")

@@ -261,6 +261,8 @@ class EmployeeBase(BaseModel):
     bank_account: Optional[str] = None
     pix_key: Optional[str] = None
     notes: Optional[str] = None
+    termination_date: Optional[date] = None
+    termination_reason: Optional[str] = None
 
 class EmployeeCreate(EmployeeBase):
     contract: ContractCreate
@@ -311,6 +313,8 @@ class EmployeeUpdate(BaseModel):
     contract_type: Optional[str] = None
     contract_status: Optional[str] = None
     reason_for_change: Optional[str] = None
+    termination_date: Optional[date] = None
+    termination_reason: Optional[str] = None
 
 class EmployeeResponse(EmployeeBase):
     id: str
@@ -459,6 +463,54 @@ class SupplierResponse(SupplierBase):
         orm_mode = True
 
 
+# ----------------- Client Schemas -----------------
+class ClientBase(BaseModel):
+    corporate_name: str
+    trade_name: str
+    cnpj: Optional[str] = None
+    contact_person: Optional[str] = None
+    phone: Optional[str] = None
+    whatsapp: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    is_active: bool = True
+
+class ClientCreate(ClientBase):
+    pass
+
+class ClientResponse(ClientBase):
+    id: str
+    group_id: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    created_by: Optional[str] = None
+    updated_by: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+
+
+# ----------------- SalaryAdjustment Schemas -----------------
+class SalaryAdjustmentBase(BaseModel):
+    employee_id: str
+    year: int
+    month: int
+    vacation_payment: float = 0.0
+    discount: float = 0.0
+    notes: Optional[str] = None
+
+class SalaryAdjustmentCreate(SalaryAdjustmentBase):
+    pass
+
+class SalaryAdjustmentResponse(SalaryAdjustmentBase):
+    id: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
 # ----------------- Financial Schemas -----------------
 class FinancialRevenueBase(BaseModel):
     description: str
@@ -470,6 +522,7 @@ class FinancialRevenueBase(BaseModel):
     payment_method: Optional[str] = None
     status: str = "A Receber"
     client: Optional[str] = None
+    client_id: Optional[str] = None
     observations: Optional[str] = None
     group_id: Optional[str] = None
 
@@ -485,6 +538,7 @@ class FinancialRevenueResponse(FinancialRevenueBase):
     change_history: Optional[str] = None
     reference_month: int
     reference_year: int
+    client_rel: Optional[ClientResponse] = None
 
     class Config:
         orm_mode = True

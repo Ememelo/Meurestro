@@ -40,7 +40,7 @@ def export_consolidated_data_excel(db: Session, current_user: User) -> io.BytesI
     # Headers
     headers1 = [
         "Matrícula", "Nome Completo", "CPF", "RG", "CTPS", "PIS", "Reservista", "Data Nascimento", "E-mail", "Telefone",
-        "Cargo", "Departamento", "Data Admissão", "Salário Base", "Status"
+        "Cargo", "Departamento", "Data Admissão", "Salário Base", "Status", "Data Demissão", "Justificativa"
     ]
     
     ws1.append(["MEURESTÔ - GESTÃO DE PESSOAL"])
@@ -67,10 +67,11 @@ def export_consolidated_data_excel(db: Session, current_user: User) -> io.BytesI
         role = emp.contract.role if emp.contract else ""
         dept = emp.contract.department if emp.contract else ""
         dob = emp.dob.strftime("%d/%m/%Y") if emp.dob else ""
+        term_date = emp.termination_date.strftime("%d/%m/%Y") if emp.termination_date else ""
         
         row_data = [
             emp.registration_number, emp.name, emp.cpf, emp.rg, emp.ctps or "", emp.pis or "", emp.reservista or "", dob, emp.email, emp.phone,
-            role, dept, adm_date, salary, (emp.status.upper() if emp.status else 'ATIVO')
+            role, dept, adm_date, salary, (emp.status.upper() if emp.status else 'ATIVO'), term_date, emp.termination_reason or ""
         ]
         ws1.append(row_data)
         
@@ -82,7 +83,7 @@ def export_consolidated_data_excel(db: Session, current_user: User) -> io.BytesI
             if row_idx % 2 == 1:
                 cell.fill = alt_row_fill
             # Alignments
-            if col_idx in [1, 3, 4, 5, 6, 7, 8, 13, 15]:
+            if col_idx in [1, 3, 4, 5, 6, 7, 8, 13, 15, 16]:
                 cell.alignment = Alignment(horizontal="center")
             elif col_idx == 14:
                 cell.number_format = '"R$" #,##0.00'
@@ -620,7 +621,7 @@ def export_employee_dossier_excel(db: Session, employee_id: str, current_user: U
     ws2.append(["DADOS DO CONTRATO"])
     ws2.cell(3, 1).font = section_font
 
-    headers_contract = ["Cargo", "Departamento/Setor", "Data Admissão", "Salário Base", "Status do Contrato", "Nível"]
+    headers_contract = ["Cargo", "Departamento/Setor", "Data Admissão", "Salário Base", "Status do Contrato", "Tipo Contrato"]
     ws2.append(headers_contract)
     for col in range(1, len(headers_contract) + 1):
         cell = ws2.cell(row=4, column=col)
@@ -632,7 +633,7 @@ def export_employee_dossier_excel(db: Session, employee_id: str, current_user: U
         adm_date = emp.contract.admission_date.strftime("%d/%m/%Y") if emp.contract.admission_date else ""
         row_contract = [
             emp.contract.role, emp.contract.department, adm_date, 
-            emp.contract.base_salary, (emp.status.upper() if emp.status else 'ATIVO'), emp.contract.level or "N/A"
+            emp.contract.base_salary, (emp.status.upper() if emp.status else 'ATIVO'), emp.contract.contract_type or "N/A"
         ]
     else:
         row_contract = ["N/A", "N/A", "N/A", 0.0, (emp.status.upper() if emp.status else 'ATIVO'), "N/A"]
@@ -676,6 +677,30 @@ def export_employee_dossier_excel(db: Session, employee_id: str, current_user: U
         cell.font = data_font
         cell.border = thin_border
         cell.alignment = Alignment(horizontal="center")
+
+    if emp.status == "terminated":
+        ws2.append([])
+        ws2.append(["DADOS DE DESLIGAMENTO"])
+        ws2.cell(ws2.max_row, 1).font = section_font
+        
+        headers_term = ["Data de Demissão", "Justificativa / Motivo"]
+        ws2.append(headers_term)
+        header_row = ws2.max_row
+        for col in range(1, len(headers_term) + 1):
+            cell = ws2.cell(row=header_row, column=col)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center")
+            
+        term_date_str = emp.termination_date.strftime("%d/%m/%Y") if emp.termination_date else "Não informada"
+        ws2.append([term_date_str, emp.termination_reason or "N/A"])
+        data_row = ws2.max_row
+        for col in range(1, len(headers_term) + 1):
+            cell = ws2.cell(row=data_row, column=col)
+            cell.font = data_font
+            cell.border = thin_border
+            if col == 1:
+                cell.alignment = Alignment(horizontal="center")
 
     for col in ws2.columns:
         max_len = max(len(str(cell.value or '')) for cell in col)

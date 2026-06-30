@@ -15,6 +15,8 @@ from app.models.all_models import (
     User,
     Supplier,
     Group,
+    SalaryAdjustment,
+    Client,
 )
 from app.schemas.all_schemas import (
     FinancialRevenueCreate,
@@ -23,6 +25,8 @@ from app.schemas.all_schemas import (
     FinancialExpenseResponse,
     FinancialSummaryResponse,
     FinancialSummaryMonth,
+    SalaryAdjustmentCreate,
+    SalaryAdjustmentResponse,
 )
 from app.api.auth import get_current_user, RoleChecker
 from app.services.audit_service import log_action
@@ -113,7 +117,20 @@ def calculate_salaries_for_period(db: Session, year: int, month: int, current_us
                 is_active_then = False
 
         if is_active_then:
-            total_salary += contract.base_salary
+            emp_salary = contract.base_salary
+            adj = (
+                db.query(SalaryAdjustment)
+                .filter(
+                    SalaryAdjustment.employee_id == emp.id,
+                    SalaryAdjustment.year == year,
+                    SalaryAdjustment.month == month
+                )
+                .first()
+            )
+            if adj:
+                emp_salary += adj.vacation_payment
+                emp_salary -= adj.discount
+            total_salary += emp_salary
             if contract.benefits:
                 try:
                     benefits_data = json.loads(contract.benefits)
@@ -149,7 +166,9 @@ def get_salaries_breakdown_for_period(db: Session, year: int, month: int, curren
         "Plano de Saúde": 0.0,
         "Plano Odontológico": 0.0,
         "Seguro de Vida": 0.0,
-        "Outros Benefícios": 0.0
+        "Outros Benefícios": 0.0,
+        "Férias": 0.0,
+        "Descontos": 0.0
     }
     
     query = db.query(Contract).join(Employee)
@@ -183,6 +202,18 @@ def get_salaries_breakdown_for_period(db: Session, year: int, month: int, curren
 
         if is_active_then:
             breakdown["Salário Base"] += float(contract.base_salary or 0.0)
+            adj = (
+                db.query(SalaryAdjustment)
+                .filter(
+                    SalaryAdjustment.employee_id == emp.id,
+                    SalaryAdjustment.year == year,
+                    SalaryAdjustment.month == month
+                )
+                .first()
+            )
+            if adj:
+                breakdown["Férias"] += adj.vacation_payment
+                breakdown["Descontos"] += adj.discount
             if contract.benefits:
                 try:
                     benefits_data = json.loads(contract.benefits)
@@ -660,12 +691,6 @@ def delete_revenue(
     if not db_revenue:
         raise HTTPException(status_code=404, detail="Receita não encontrada")
 
-    if db_revenue.status in ["Recebido", "Cancelado"]:
-        raise HTTPException(
-            status_code=400,
-            detail="Movimentações recebidas ou canceladas não podem ser excluídas física ou permanentemente. Altere o status para Cancelar se desejar retirá-la do caixa."
-        )
-
     log_action(
         db,
         current_user.id,
@@ -866,12 +891,6 @@ def delete_expense(
     if not db_expense:
         raise HTTPException(status_code=404, detail="Despesa não encontrada")
 
-    if db_expense.status in ["Pago", "Cancelado"]:
-        raise HTTPException(
-            status_code=400,
-            detail="Movimentações pagas ou canceladas não podem ser excluídas física ou permanentemente. Altere o status para Cancelar se desejar retirá-la do fluxo."
-        )
-
     log_action(
         db,
         current_user.id,
@@ -884,3 +903,67 @@ def delete_expense(
     db.delete(db_expense)
     db.commit()
     return None
+
+
+@router.get("/salary-adjustments", response_model=List[SalaryAdjustmentResponse])
+def list_salary_adjustments(
+    year: int,
+    month: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_financial_viewer)
+):
+    query = db.query(SalaryAdjustment).join(Employee)
+    if current_user.role != "admin":
+        query = query.filter(Employee.group_id == current_user.group_id)
+        
+    return query.filter(
+        SalaryAdjustment.year == year,
+        SalaryAdjustment.month == month
+    ).all()
+
+
+@router.post("/salary-adjustments", response_model=SalaryAdjustmentResponse)
+def upsert_salary_adjustment(
+    adj_in: SalaryAdjustmentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_financial_manager)
+):
+    # Check that employee belongs to user's group
+    emp = db.query(Employee).filter(Employee.id == adj_in.employee_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Colaborador não encontrado")
+        
+    if current_user.role != "admin" and emp.group_id != current_user.group_id:
+        raise HTTPException(status_code=403, detail="Você não tem permissão para gerenciar dados deste colaborador")
+
+    db_adj = db.query(SalaryAdjustment).filter(
+        SalaryAdjustment.employee_id == adj_in.employee_id,
+        SalaryAdjustment.year == adj_in.year,
+        SalaryAdjustment.month == adj_in.month
+    ).first()
+
+    if db_adj:
+        db_adj.vacation_payment = adj_in.vacation_payment
+        db_adj.discount = adj_in.discount
+        db_adj.notes = adj_in.notes
+        db_adj.updated_at = datetime.utcnow()
+    else:
+        db_adj = SalaryAdjustment(
+            **adj_in.dict()
+        )
+        db.add(db_adj)
+
+    db.commit()
+    db.refresh(db_adj)
+
+    log_action(
+        db,
+        current_user.id,
+        "SAVE_SALARY_ADJUSTMENT",
+        "salary_adjustments",
+        db_adj.id,
+        {"employee_id": db_adj.employee_id, "year": db_adj.year, "month": db_adj.month}
+    )
+
+    return db_adj
+

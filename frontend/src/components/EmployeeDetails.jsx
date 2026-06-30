@@ -50,8 +50,22 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
   const [discForm, setDiscForm] = useState({ type: 'warning', action_date: '', reason: '', details: '', duration_days: '', manager_name: '' })
   const [otForm, setOtForm] = useState({ date: '', hours_50_minutes: 0, hours_100_minutes: 0, hours_night_minutes: 0 })
   const [leaveForm, setLeaveForm] = useState({ start_date: '', end_date: '', reason: '' })
-  const [termForm, setTermForm] = useState({ reason: '' })
+  const [termForm, setTermForm] = useState({ reason: '', date: new Date().toISOString().split('T')[0] })
   const [depForm, setDepForm] = useState({ name: '', relationship: 'Filho(a)', dob: '' })
+  
+  const [workedTime, setWorkedTime] = useState(null)
+  const [wtYear, setWtYear] = useState(new Date().getFullYear())
+  const [wtMonth, setWtMonth] = useState(new Date().getMonth() + 1)
+
+  const fetchWorkedTime = async (y, m) => {
+    try {
+      const res = await api.get(`/employees/${employeeId}/worked-time?year=${y}&month=${m}`)
+      setWorkedTime(res.data)
+    } catch (err) {
+      console.error(err)
+      setWorkedTime(null)
+    }
+  }
 
   const fetchEmployeeData = async () => {
     setLoading(true)
@@ -84,8 +98,9 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
   useEffect(() => {
     if (employeeId) {
       fetchEmployeeData()
+      fetchWorkedTime(wtYear, wtMonth)
     }
-  }, [employeeId])
+  }, [employeeId, wtYear, wtMonth])
 
   if (loading) {
     return (
@@ -294,6 +309,8 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
       // Create a PUT request to update employee status to terminated
       await api.put(`/employees/${employeeId}`, {
         status: 'terminated',
+        termination_date: termForm.date,
+        termination_reason: termForm.reason,
         reason_for_change: termForm.reason
       })
       setActiveModal(null)
@@ -347,7 +364,7 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
           {isRHOrAdmin && emp.status !== 'terminated' && (
             <button
               onClick={() => {
-                setTermForm({ reason: '' })
+                setTermForm({ reason: '', date: new Date().toISOString().split('T')[0] })
                 setActiveModal('terminate')
               }}
               className="flex items-center gap-2 px-3.5 py-2 border border-red-200 hover:bg-red-50 text-red-600 hover:border-red-300 rounded-lg text-xs font-bold transition-all cursor-pointer"
@@ -870,6 +887,104 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
         {/* TAB 5: JORNADA & HORAS EXTRAS */}
         {activeTab === 'overtime' && (
           <div className="space-y-6">
+            {/* Worked Time & Calculations Reference Panel */}
+            <div className="bg-white p-5 border border-slate-200 rounded-xl space-y-4 shadow-sm">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h4 className="font-black text-slate-800 text-sm">Resumo da Jornada e Apuração Mensal</h4>
+                  <p className="text-[11px] text-slate-400">Dados consolidados do período selecionado</p>
+                </div>
+                
+                {/* Year/Month selectors */}
+                <div className="flex items-center gap-2">
+                  <select 
+                    value={wtMonth} 
+                    onChange={(e) => setWtMonth(parseInt(e.target.value))}
+                    className="bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-amber-500 text-slate-700"
+                  >
+                    {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].map((m, idx) => (
+                      <option key={m} value={idx + 1}>{m}</option>
+                    ))}
+                  </select>
+                  <select 
+                    value={wtYear} 
+                    onChange={(e) => setWtYear(parseInt(e.target.value))}
+                    className="bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-amber-500 text-slate-700"
+                  >
+                    {[2024, 2025, 2026, 2027, 2028].map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {workedTime ? (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2">
+                  {/* Contractual/Scale Info */}
+                  <div className="bg-slate-50 p-4 border border-slate-100 rounded-xl space-y-1">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Jornada Contratual</span>
+                    <div className="text-base font-black text-slate-700">
+                      {workedTime.contractual_hours_weekly}h / semana
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-semibold">
+                      Previsto no mês: {workedTime.contractual_hours_monthly}h
+                    </div>
+                  </div>
+
+                  {/* Effective Work Time */}
+                  <div className="bg-indigo-50/40 p-4 border border-indigo-100 rounded-xl space-y-1">
+                    <span className="text-[9px] font-black text-indigo-500 uppercase tracking-wider">Trabalho Efetivo</span>
+                    <div className="text-base font-black text-indigo-700">
+                      {Math.floor(workedTime.effective_worked_minutes / 60)}h {workedTime.effective_worked_minutes % 60}min
+                    </div>
+                    <div className="text-[10px] text-indigo-600 font-semibold">
+                      Com base nas horas extras aprovadas
+                    </div>
+                  </div>
+
+                  {/* Overtime (Extras) */}
+                  <div className="bg-emerald-50/40 p-4 border border-emerald-100 rounded-xl space-y-1">
+                    <span className="text-[9px] font-black text-emerald-600 uppercase tracking-wider">Horas Extras Aprovadas</span>
+                    <div className="text-base font-black text-emerald-700">
+                      + {workedTime.overtime_payment.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </div>
+                    <div className="text-[10px] text-emerald-600 font-semibold">
+                      Total: {Math.floor(workedTime.overtime_minutes / 60)}h {workedTime.overtime_minutes % 60}min
+                    </div>
+                  </div>
+
+                  {/* Absence Deductions */}
+                  <div className="bg-rose-50/40 p-4 border border-rose-100 rounded-xl space-y-1">
+                    <span className="text-[9px] font-black text-rose-600 uppercase tracking-wider">Faltas Sem Justificativa</span>
+                    <div className="text-base font-black text-rose-700">
+                      - {workedTime.absence_deduction.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </div>
+                    <div className="text-[10px] text-rose-600 font-semibold">
+                      Total de faltas: {workedTime.absent_days} {workedTime.absent_days === 1 ? 'dia' : 'dias'}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 italic">Carregando apuração da jornada...</p>
+              )}
+
+              {workedTime && (
+                <div className="mt-4 p-3.5 bg-slate-900 text-white rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs font-semibold">
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider block">Custo de Folha Previsto (Mês de Referência)</span>
+                    <div className="text-sm font-black text-amber-400">
+                      {workedTime.net_salary.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-300 leading-relaxed max-w-md">
+                    Demonstrativo simplificado: Salário Base ({workedTime.base_salary.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}) 
+                    + Extras ({workedTime.overtime_payment.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}) 
+                    - Faltas ({workedTime.absence_deduction.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* Shift definition summary */}
             <div className="p-4 border border-slate-200 bg-slate-50 rounded-xl flex justify-between items-center text-xs">
               <div>
@@ -1335,7 +1450,18 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
               </div>
 
               <div>
-                <label className="form-label">Justificativa / Motivo do Desligamento</label>
+                <label className="form-label text-[10px] uppercase font-bold text-slate-400 tracking-wider">Data de Desligamento</label>
+                <input
+                  type="date"
+                  value={termForm.date}
+                  onChange={(e) => setTermForm(prev => ({ ...prev, date: e.target.value }))}
+                  className="form-input"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="form-label text-[10px] uppercase font-bold text-slate-400 tracking-wider">Justificativa / Motivo do Desligamento</label>
                 <textarea
                   value={termForm.reason}
                   onChange={(e) => setTermForm(prev => ({ ...prev, reason: e.target.value }))}

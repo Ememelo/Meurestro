@@ -26,6 +26,7 @@ class Group(Base):
     sectors = relationship("Sector", back_populates="group")
     job_positions = relationship("JobPosition", back_populates="group")
     work_scales = relationship("WorkScale", back_populates="group")
+    clients = relationship("Client", back_populates="group", cascade="all, delete-orphan")
 
 class User(Base):
     __tablename__ = "users"
@@ -96,6 +97,8 @@ class Employee(Base):
     bank_account = Column(String(30), nullable=True)
     pix_key = Column(String(100), nullable=True)
     notes = Column(Text, nullable=True)
+    termination_date = Column(Date, nullable=True)
+    termination_reason = Column(Text, nullable=True)
     
     # Relationships
     group = relationship("Group", back_populates="employees")
@@ -107,6 +110,7 @@ class Employee(Base):
     overtime_records = relationship("Overtime", back_populates="employee", cascade="all, delete-orphan")
     leaves = relationship("Leave", back_populates="employee", cascade="all, delete-orphan")
     documents = relationship("EmployeeDocument", back_populates="employee", cascade="all, delete-orphan")
+    salary_adjustments = relationship("SalaryAdjustment", back_populates="employee", cascade="all, delete-orphan")
 
 class Dependent(Base):
     __tablename__ = "dependents"
@@ -289,9 +293,11 @@ class FinancialRevenue(Base):
     change_history = Column(Text, nullable=True)
     reference_month = Column(Integer, nullable=False)
     reference_year = Column(Integer, nullable=False)
+    client_id = Column(String(36), ForeignKey("clients.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     group = relationship("Group", back_populates="revenues")
+    client_rel = relationship("Client", back_populates="revenues")
 
 
 class FinancialExpense(Base):
@@ -416,4 +422,46 @@ class InventoryItem(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     created_by = Column(String(50), nullable=True)
     updated_by = Column(String(50), nullable=True)
+
+
+class Client(Base):
+    __tablename__ = "clients"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    group_id = Column(String(36), ForeignKey("groups.id", ondelete="SET NULL"), nullable=True)
+    corporate_name = Column(String(255), nullable=False)
+    trade_name = Column(String(255), nullable=False)
+    cnpj = Column(String(20), nullable=True)
+    contact_person = Column(String(100), nullable=True)
+    phone = Column(String(20), nullable=True)
+    whatsapp = Column(String(20), nullable=True)
+    email = Column(String(100), nullable=True)
+    address = Column(String(255), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_by = Column(String(50), nullable=True)
+    updated_by = Column(String(50), nullable=True)
+
+    # Relationships
+    group = relationship("Group", back_populates="clients")
+    revenues = relationship("FinancialRevenue", back_populates="client_rel")
+
+
+class SalaryAdjustment(Base):
+    __tablename__ = "salary_adjustments"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    employee_id = Column(String(36), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    year = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=False)
+    vacation_payment = Column(Float, default=0.0, nullable=False)
+    discount = Column(Float, default=0.0, nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    employee = relationship("Employee", back_populates="salary_adjustments")
+
 

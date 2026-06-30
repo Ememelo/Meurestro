@@ -212,40 +212,18 @@ def run_tests():
         assert res_summary_er.json()["cash_balance"] == init_cash + 2500.0 - 1000.0
         assert res_summary_er.json()["pending_payables"] == 0.0
         print("[SUCCESS] Paid expense updated cash balance and cleared from pending.")
-
-        # 6. Test Deletion Block for Finalized Records
-        print("\n--- Testing Deletion Block ---")
+        # 6. Test Deletion for Finalized Records (Permissive Delete)
+        print("\n--- Testing Deletion for Finalized Records ---")
         
-        # Try to delete paid expense (status "Pago")
-        res_del_exp_fail = client.delete(f"/api/financial/expenses/{exp_p_id}", headers=headers_a)
-        assert res_del_exp_fail.status_code == 400
-        assert "Movimentações pagas ou canceladas não podem ser excluídas" in res_del_exp_fail.json()["detail"]
-        print("[SUCCESS] Blocked deletion of paid expense.")
-
-        # Try to delete received revenue (status "Recebido")
-        res_del_rev_fail = client.delete(f"/api/financial/revenues/{rev_p_id}", headers=headers_a)
-        assert res_del_rev_fail.status_code == 400
-        assert "Movimentações recebidas ou canceladas não podem ser excluídas" in res_del_rev_fail.json()["detail"]
-        print("[SUCCESS] Blocked deletion of received revenue.")
-
-        # Update revenue to "Cancelado" and test deletion block
-        revenue_cancelled = revenue_received.copy()
-        revenue_cancelled["status"] = "Cancelado"
-        client.put(f"/api/financial/revenues/{rev_p_id}", json=revenue_cancelled, headers=headers_a)
-        
-        res_del_rev_cancel_fail = client.delete(f"/api/financial/revenues/{rev_p_id}", headers=headers_a)
-        assert res_del_rev_cancel_fail.status_code == 400
-        print("[SUCCESS] Blocked deletion of cancelled revenue.")
-
-        # Update expense to "Pendente" to allow deletion
-        expense_reverted = expense_paid.copy()
-        expense_reverted["status"] = "Pendente"
-        client.put(f"/api/financial/expenses/{exp_p_id}", json=expense_reverted, headers=headers_a)
-        
-        # Try to delete now
+        # Delete paid expense (status "Pago")
         res_del_exp_ok = client.delete(f"/api/financial/expenses/{exp_p_id}", headers=headers_a)
         assert res_del_exp_ok.status_code == 204
-        print("[SUCCESS] Reverted pending expense deleted successfully.")
+        print("[SUCCESS] Deleted paid expense successfully.")
+
+        # Delete received revenue (status "Recebido")
+        res_del_rev_ok = client.delete(f"/api/financial/revenues/{rev_p_id}", headers=headers_a)
+        assert res_del_rev_ok.status_code == 204
+        print("[SUCCESS] Deleted received revenue successfully.")
 
         # 7. Test Recurring Expense Generation
         print("\n--- Testing Recurring Expense Generation ---")

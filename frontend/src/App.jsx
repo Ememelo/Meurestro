@@ -137,6 +137,8 @@ const AppContent = () => {
         return <Financial />
       case 'suppliers':
         return <Financial forceSubTab="suppliers" />
+      case 'clients':
+        return <Financial forceSubTab="clients" />
       case 'inventory':
         return <Inventory />
       case 'audit':

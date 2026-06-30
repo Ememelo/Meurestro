@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import api from '../utils/api'
 import { FileSpreadsheet, Download, Info, CheckCircle2, User, HelpCircle } from 'lucide-react'
+import SearchableSelect from './SearchableSelect'
 
 const Reports = () => {
   const [downloading, setDownloading] = useState(false)
@@ -173,17 +174,15 @@ const Reports = () => {
               {employees.length === 0 ? (
                 <div className="text-xs text-slate-400 py-2">Carregando lista de funcionários...</div>
               ) : (
-                <select
+                <SearchableSelect
+                  options={employees.map(emp => ({
+                    value: emp.id,
+                    label: `${emp.registration_number} - ${emp.name} (${emp.status === 'active' ? 'Ativo' : 'Desligado'})`
+                  }))}
                   value={selectedEmployeeId}
-                  onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-xs px-3 py-2.5 rounded-lg font-semibold focus:outline-none focus:border-amber-500"
-                >
-                  {employees.map(emp => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.registration_number} - {emp.name} ({emp.status === 'active' ? 'Ativo' : 'Desligado'})
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setSelectedEmployeeId(val)}
+                  placeholder="Selecione ou busque o colaborador..."
+                />
               )}
             </div>
 
