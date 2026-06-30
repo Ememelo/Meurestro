@@ -1414,6 +1414,7 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
                   required
                 >
                   <option value="">Selecione o motivo...</option>
+                  <option value="Falta Sem Justificativa">Falta Sem Justificativa</option>
                   <option value="Licença Médica / Atestado">Licença Médica / Atestado</option>
                   <option value="Férias Programadas">Férias Programadas</option>
                   <option value="Licença Maternidade">Licença Maternidade</option>
