@@ -924,10 +924,10 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
                   <div className="bg-slate-50 p-4 border border-slate-100 rounded-xl space-y-1">
                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Jornada Contratual</span>
                     <div className="text-base font-black text-slate-700">
-                      {workedTime.contractual_hours_weekly}h / semana
+                      {(workedTime.weekly_hours || 0)}h / semana
                     </div>
                     <div className="text-[10px] text-slate-500 font-semibold">
-                      Previsto no mês: {workedTime.contractual_hours_monthly}h
+                      Previsto no mês: {(workedTime.monthly_hours || 0)}h
                     </div>
                   </div>
 
@@ -935,7 +935,7 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
                   <div className="bg-indigo-50/40 p-4 border border-indigo-100 rounded-xl space-y-1">
                     <span className="text-[9px] font-black text-indigo-500 uppercase tracking-wider">Trabalho Efetivo</span>
                     <div className="text-base font-black text-indigo-700">
-                      {Math.floor(workedTime.effective_worked_minutes / 60)}h {workedTime.effective_worked_minutes % 60}min
+                      {Math.floor(workedTime.actual_worked_hours || 0)}h {Math.round(((workedTime.actual_worked_hours || 0) % 1) * 60)}min
                     </div>
                     <div className="text-[10px] text-indigo-600 font-semibold">
                       Com base nas horas extras aprovadas
@@ -946,10 +946,10 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
                   <div className="bg-emerald-50/40 p-4 border border-emerald-100 rounded-xl space-y-1">
                     <span className="text-[9px] font-black text-emerald-600 uppercase tracking-wider">Horas Extras Aprovadas</span>
                     <div className="text-base font-black text-emerald-700">
-                      + {workedTime.overtime_payment.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      + {(workedTime.overtime_payment || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </div>
                     <div className="text-[10px] text-emerald-600 font-semibold">
-                      Total: {Math.floor(workedTime.overtime_minutes / 60)}h {workedTime.overtime_minutes % 60}min
+                      Total: {Math.floor(workedTime.overtime_hours || 0)}h {Math.round(((workedTime.overtime_hours || 0) % 1) * 60)}min
                     </div>
                   </div>
 
@@ -957,10 +957,10 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
                   <div className="bg-rose-50/40 p-4 border border-rose-100 rounded-xl space-y-1">
                     <span className="text-[9px] font-black text-rose-600 uppercase tracking-wider">Faltas Sem Justificativa</span>
                     <div className="text-base font-black text-rose-700">
-                      - {workedTime.absence_deduction.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      - {(workedTime.absence_discount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </div>
                     <div className="text-[10px] text-rose-600 font-semibold">
-                      Total de faltas: {workedTime.absent_days} {workedTime.absent_days === 1 ? 'dia' : 'dias'}
+                      Total de faltas: {workedTime.absent_days || 0} {workedTime.absent_days === 1 ? 'dia' : 'dias'}
                     </div>
                   </div>
                 </div>
@@ -973,13 +973,13 @@ const EmployeeDetails = ({ employeeId, onBack, onEditEmployee }) => {
                   <div>
                     <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider block">Custo de Folha Previsto (Mês de Referência)</span>
                     <div className="text-sm font-black text-amber-400">
-                      {workedTime.net_salary.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      {((workedTime.base_salary || 0) + (workedTime.overtime_payment || 0) - (workedTime.absence_discount || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </div>
                   </div>
                   <p className="text-[10px] text-slate-300 leading-relaxed max-w-md">
-                    Demonstrativo simplificado: Salário Base ({workedTime.base_salary.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}) 
-                    + Extras ({workedTime.overtime_payment.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}) 
-                    - Faltas ({workedTime.absence_deduction.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})
+                    Demonstrativo simplificado: Salário Base ({(workedTime.base_salary || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}) 
+                    + Extras ({(workedTime.overtime_payment || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}) 
+                    - Faltas ({(workedTime.absence_discount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})
                   </p>
                 </div>
               )}
